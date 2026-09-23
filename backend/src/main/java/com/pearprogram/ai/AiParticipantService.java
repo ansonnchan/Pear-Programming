@@ -43,7 +43,7 @@ public class AiParticipantService {
             @Value("${GROQ_API_KEY:}") String groqApiKey,
             @Value("${pearprogram.ai.placeholder-mode:false}") boolean placeholderMode,
             @Value("${GROQ_BASE_URL:https://api.groq.com/openai/v1}") String groqBaseUrl,
-            @Value("${GROQ_MODEL:llama-3.3-70b-versatile}") String model,
+            @Value("${GROQ_MODEL:openai/gpt-oss-120b}") String model,
             @Value("${GROQ_MAX_COMPLETION_TOKENS:220}") int maxCompletionTokens,
             @Value("${GROQ_TEMPERATURE:0.3}") double temperature
     ) {
