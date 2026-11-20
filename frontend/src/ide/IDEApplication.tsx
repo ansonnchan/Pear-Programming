@@ -223,6 +223,7 @@ export function IDEApplication() {
   const contentSyncTimerRef = useRef<number | null>(null);
   const pendingContentSyncRef = useRef<{ fileId: string; content: string; updatedAt: string } | null>(null);
   const lastLocalEditAtRef = useRef(0);
+  const creatingItemRef = useRef(false);
   const seedingFileIdsRef = useRef<Set<string>>(new Set());
   const deletedFileIdsRef = useRef<Set<string>>(new Set());
   const folderInputRef = useRef<HTMLInputElement | null>(null);
@@ -1092,6 +1093,19 @@ export function IDEApplication() {
   }
 
   async function confirmCreateItem() {
+    // Enter and the Create button can both fire while a request is in flight; one create per dialog.
+    if (creatingItemRef.current) {
+      return;
+    }
+    creatingItemRef.current = true;
+    try {
+      await createItemFromDialog();
+    } finally {
+      creatingItemRef.current = false;
+    }
+  }
+
+  async function createItemFromDialog() {
     const currentKind = createItemKind;
     const name = createItemName.trim();
     const existingPaths = files.map((file) => file.path);
