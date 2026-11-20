@@ -31,12 +31,13 @@ describe('LandingPage', () => {
     expect(onJoin).toHaveBeenCalledOnce();
   });
 
-  it('keeps the landing page to one create-or-join card without decorative art', () => {
+  it('keeps one create-or-join card with a single decorative illustration', () => {
     const { container } = render(<LandingPage {...baseProps} />);
 
     expect(screen.getByRole('region', { name: 'Create or join a room' })).toBeInTheDocument();
     expect(screen.getByLabelText('Room code')).toBeInTheDocument();
-    expect(container.querySelectorAll('img')).toHaveLength(1);
+    expect(screen.getByRole('list', { name: 'What you can do in a room' }).children).toHaveLength(3);
+    expect(container.querySelectorAll('img[aria-hidden="true"]')).toHaveLength(1);
   });
 
   it('exposes compact service wake-up links', () => {

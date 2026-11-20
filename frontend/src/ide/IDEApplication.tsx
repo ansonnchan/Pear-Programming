@@ -73,7 +73,6 @@ import type { UploadCandidate, UploadReadResult } from '../uploads';
 import { projectNameForPaths, readDroppedUploadCandidates, readUploadCandidates } from '../uploads';
 import type { AiAnnotation, ChatMessage, CursorMessage, Member, ProjectSwitchEvent, Room, RoomSessionState, WorkspaceFile } from '../types';
 
-const DEFAULT_COLOR = '#000000';
 const CONTENT_SYNC_DELAY_MS = 250;
 const BACKEND_WAKE_URL = buildWakeUrl(API_BASE_URL, '/healthz');
 const REALTIME_WAKE_URL = 'https://pear-program-realtime.onrender.com/health';
@@ -376,12 +375,12 @@ export function IDEApplication() {
       client.publish({
         destination: `/app/room/${currentRoom.code}/cursors`,
         body: JSON.stringify({
-          userId: user.id,
-          displayName: user.name,
+          userId: userRef.current.id,
+          displayName: userRef.current.name,
           fileId: currentFile.id,
           line: event.position.lineNumber,
           col: event.position.column,
-          color: DEFAULT_COLOR,
+          color: userRef.current.color,
           sentAt: now
         })
       });
@@ -1031,7 +1030,7 @@ export function IDEApplication() {
       sessionId: user.id,
       connectionId,
       displayName: user.name,
-      color: DEFAULT_COLOR,
+      color: user.color,
       avatarUrl: user.avatarUrl,
       leadUserId: user.id,
       at: new Date().toISOString()
@@ -1052,7 +1051,7 @@ export function IDEApplication() {
       sessionId: user.id,
       connectionId,
       displayName: user.name,
-      color: DEFAULT_COLOR,
+      color: user.color,
       avatarUrl: user.avatarUrl,
       leadUserId: user.id,
       locked: nextLocked,
@@ -1072,7 +1071,7 @@ export function IDEApplication() {
       sessionId: user.id,
       connectionId,
       displayName: user.name,
-      color: DEFAULT_COLOR,
+      color: user.color,
       avatarUrl: user.avatarUrl,
       leadUserId: nextLead.id,
       targetUserId: nextLead.id,

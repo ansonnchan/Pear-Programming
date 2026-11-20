@@ -1,4 +1,6 @@
+import { MessageCircle, Play, UsersRound } from 'lucide-react';
 import pearLogoUrl from '../../../assets/favicon.png';
+import pearsAtTableUrl from '../../../assets/landing-cozy-room.webp';
 
 type LandingPageProps = {
   backendWakeUrl: string;
@@ -29,14 +31,13 @@ export function LandingPage({
 
   return (
     <main className="landing">
+      <img alt="" aria-hidden="true" className="landing-illustration" src={pearsAtTableUrl} />
       <div className="landing-inner">
         <header className="landing-brand">
-          <img alt="" src={pearLogoUrl} />
+          <span className="landing-badge"><img alt="" src={pearLogoUrl} /></span>
           <h1>Pear Programming</h1>
         </header>
-        <p className="landing-tagline">
-          Real-time pair programming in the browser. Share a room code, edit together, and run code.
-        </p>
+        <p className="landing-tagline">Pair program together in a shared, real-time room.</p>
 
         <section aria-labelledby="room-card-title" className="landing-card">
           <h2 className="sr-only" id="room-card-title">Create or join a room</h2>
@@ -78,9 +79,11 @@ export function LandingPage({
           </div>
         </section>
 
-        <p className="landing-features">
-          Live collaborative editing · Room chat with @PearAI · Runs 14 languages · Up to five pears per room
-        </p>
+        <ul aria-label="What you can do in a room" className="landing-features">
+          <li><UsersRound aria-hidden="true" size={16} /><span>Edit together live, up to five pears</span></li>
+          <li><MessageCircle aria-hidden="true" size={16} /><span>Chat and ask @PearAI for help</span></li>
+          <li><Play aria-hidden="true" size={16} /><span>Run code in 14 languages</span></li>
+        </ul>
 
         {(backendWakeUrl || realtimeWakeUrl) && (
           <p className="landing-wake">
