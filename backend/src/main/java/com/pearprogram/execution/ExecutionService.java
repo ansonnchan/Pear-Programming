@@ -202,8 +202,11 @@ public class ExecutionService {
     private ValidatedRequest validate(ExecutionRequest request) {
         if (request == null) throw new ExecutionApiException(HttpStatus.BAD_REQUEST, "invalid_request", "Execution request is required");
         String language = languages.normalize(request.language());
-        int languageId = languages.judge0Id(language).orElseThrow(() -> new ExecutionApiException(HttpStatus.BAD_REQUEST,
-                "unsupported_language", "Supported languages are: " + String.join(", ", languages.supportedLanguages())));
+        int languageId = languages.judge0Id(language)
+                .stream().filter(ignored -> provider.supportsLanguage(language)).findFirst()
+                .orElseThrow(() -> new ExecutionApiException(HttpStatus.BAD_REQUEST, "unsupported_language",
+                        "Supported languages are: " + String.join(", ", languages.supportedLanguages().stream()
+                                .filter(provider::supportsLanguage).toList())));
         String sourceCode = request.sourceCode() == null ? "" : request.sourceCode();
         String stdin = request.stdin() == null ? "" : request.stdin();
         if (sourceCode.isBlank()) throw new ExecutionApiException(HttpStatus.BAD_REQUEST, "source_required", "Source code is required");

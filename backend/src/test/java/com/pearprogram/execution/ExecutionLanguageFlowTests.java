@@ -43,7 +43,10 @@ class ExecutionLanguageFlowTests {
 
         mockMvc.perform(get("/api/execution/languages").session(session))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(16)))
+                // The default Wandbox provider cannot run Kotlin or Swift.
+                .andExpect(jsonPath("$", hasSize(14)))
+                .andExpect(jsonPath("$[*].id", not(hasItem("kotlin"))))
+                .andExpect(jsonPath("$[*].id", not(hasItem("swift"))))
                 .andExpect(jsonPath("$[0].id").value("java"))
                 .andExpect(jsonPath("$[*].id", hasItem("rust")))
                 .andExpect(jsonPath("$[*].id", not(hasItem("markdown"))));
