@@ -402,7 +402,6 @@ function attachRedisPersistence(doc, roomCode, fileId) {
       return;
     }
 
-    logMetric('yjs_sync_delay_ms', 0, roomCode);
     if (!redis || !redisAvailable) {
       return;
     }
