@@ -33,3 +33,6 @@ realtime/.cache/
 # Docker
 postgres-data/
 redis-data/
+
+# Local dev server error logs
+*.err
