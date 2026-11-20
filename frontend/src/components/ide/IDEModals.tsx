@@ -177,7 +177,7 @@ export function CreateItemModal({ error, kind, name, onCancel, onConfirm, onName
         </header>
         <p id="create-item-help">
           {isFolder
-            ? 'Enter a folder name. PearProgramming will create the folder and preserve its structure.'
+            ? 'Enter a folder name. Pear Programming will create the folder and preserve its structure.'
             : 'Enter a file name. You can include an extension like .ts or .md.'}
         </p>
         <label className="field-label">

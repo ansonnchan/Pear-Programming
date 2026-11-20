@@ -1144,7 +1144,7 @@ export function IDEApplication() {
       );
       if (!hasFolderPaths) {
         input.value = '';
-        setUploadNotice('Please choose a folder so PearProgramming can preserve the project structure.');
+        setUploadNotice('Please choose a folder so Pear Programming can preserve the project structure.');
         setSaveState('error');
         return;
       }

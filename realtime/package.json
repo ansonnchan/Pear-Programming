@@ -2,7 +2,7 @@
   "name": "@pearprogram/realtime",
   "version": "0.1.0",
   "private": true,
-  "description": "PearProgram Node y-websocket sync service",
+  "description": "Pear Programming Node y-websocket sync service",
   "main": "src/server.cjs",
   "scripts": {
     "dev": "node src/server.cjs",

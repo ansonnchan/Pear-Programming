@@ -45,7 +45,7 @@ export function IDEHeader({
     <header className="topbar">
       <button className="brand brand-link" onClick={onReturnToLanding} type="button">
         <img alt="" className="brand-logo" src={pearLogoUrl} />
-        <span>PearProgramming</span>
+        <span>Pear Programming</span>
       </button>
       <div className="room-header-center">
         <div className="room-code-control" aria-label={`Room code ${roomCode}`}>

@@ -186,7 +186,7 @@ setInterval(() => {
 }, SNAPSHOT_INTERVAL_MS).unref();
 
 server.listen(PORT, () => {
-  log('info', 'PearProgram y-websocket service listening', { port: PORT });
+  log('info', 'Pear Programming y-websocket service listening', { port: PORT });
 });
 
 process.on('SIGTERM', () => void shutdown('SIGTERM'));

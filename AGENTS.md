@@ -1,8 +1,8 @@
-# PearProgramming Agent Instructions
+# Pear Programming Agent Instructions
 
 ## Project overview
 
-PearProgramming is a real-time collaborative coding environment.
+Pear Programming is a real-time collaborative coding environment.
 
 Core systems include:
 
@@ -30,7 +30,7 @@ Preserve real-time collaboration behaviour when modifying frontend components.
 
 ## UI direction
 
-PearProgramming should feel like a cozy shared coding room.
+Pear Programming should feel like a cozy shared coding room.
 
 The visual language should use:
 

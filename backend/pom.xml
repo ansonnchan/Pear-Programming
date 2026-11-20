@@ -14,8 +14,8 @@
     <groupId>com.pearprogram</groupId>
     <artifactId>backend</artifactId>
     <version>0.1.0-SNAPSHOT</version>
-    <name>PearProgram Backend</name>
-    <description>Spring Boot API for PearProgram collaborative code editor</description>
+    <name>Pear Programming Backend</name>
+    <description>Spring Boot API for Pear Programming collaborative code editor</description>
 
     <properties>
         <java.version>21</java.version>
