@@ -1,5 +1,7 @@
 # Pear Programming
 
+[![CI](https://github.com/ansonnchan/Pear-Programming/actions/workflows/ci.yml/badge.svg)](https://github.com/ansonnchan/Pear-Programming/actions/workflows/ci.yml)
+
 Pear Programming is a real-time collaborative browser IDE for pair programming. Users can create or join a room, edit shared files, chat, work with PearAI, and run code in a sandboxed environment.
 
 ## Highlights
@@ -121,6 +123,8 @@ Judge0 language IDs vary between deployments. Compare the backend registry with 
 ```
 
 Frontend and backend tests use mocked execution providers, so Judge0 is not required.
+
+With Redis running locally, set `PEARPROGRAM_TEST_REDIS_HOST=localhost` before `mvn test` to also run the Redis room-admission test. CI runs all three suites on every pull request and push to `main`.
 
 Execution latency definitions and repeatable benchmark commands are documented in
 [docs/execution-performance.md](docs/execution-performance.md).
