@@ -1,5 +1,7 @@
 package com.pearprogram.files;
 
+import com.pearprogram.persistence.DatabaseTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -42,7 +44,7 @@ public class WorkspaceFileEntity {
     }
 
     public WorkspaceFileEntity(UUID id, UUID workspaceId, String path, String language, String content, int sortOrder) {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = DatabaseTime.now();
         this.id = id;
         this.workspaceId = workspaceId;
         this.path = path;
@@ -58,12 +60,12 @@ public class WorkspaceFileEntity {
         this.language = language;
         this.content = content;
         this.sortOrder = sortOrder;
-        this.updatedAt = OffsetDateTime.now();
+        this.updatedAt = DatabaseTime.now();
     }
 
     public void updateContent(String content) {
         this.content = content;
-        this.updatedAt = OffsetDateTime.now();
+        this.updatedAt = DatabaseTime.now();
     }
 
     public UUID getId() { return id; }

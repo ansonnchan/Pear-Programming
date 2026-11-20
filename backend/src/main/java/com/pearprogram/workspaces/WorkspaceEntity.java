@@ -1,5 +1,7 @@
 package com.pearprogram.workspaces;
 
+import com.pearprogram.persistence.DatabaseTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -30,7 +32,7 @@ public class WorkspaceEntity {
     }
 
     public WorkspaceEntity(UUID id, String name, UUID ownerUserId) {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = DatabaseTime.now();
         this.id = id;
         this.name = name;
         this.ownerUserId = ownerUserId;

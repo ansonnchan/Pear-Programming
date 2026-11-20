@@ -1,5 +1,7 @@
 package com.pearprogram.rooms;
 
+import com.pearprogram.persistence.DatabaseTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -39,7 +41,7 @@ public class RoomEntity {
     }
 
     public RoomEntity(String code, UUID workspaceId, UUID ownerUserId) {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = DatabaseTime.now();
         this.id = UUID.randomUUID();
         this.code = code;
         this.workspaceId = workspaceId;
@@ -51,7 +53,7 @@ public class RoomEntity {
 
     public void close() {
         this.active = false;
-        this.closedAt = OffsetDateTime.now();
+        this.closedAt = DatabaseTime.now();
         this.updatedAt = this.closedAt;
     }
 
