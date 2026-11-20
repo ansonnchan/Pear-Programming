@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -41,6 +42,38 @@ public class EphemeralRoomStateService {
             "#EF4444",
             "#0EA5E9"
     );
+
+    // Checks capacity, lock, and membership and records the joining connection in one atomic step,
+    // so concurrent joins cannot both take the last seat.
+    private static final DefaultRedisScript<String> RESERVE_PRESENCE = new DefaultRedisScript<>("""
+            local entries = redis.call('HGETALL', KEYS[1])
+            local now = tonumber(ARGV[5])
+            local users = {}
+            local count = 0
+            local isMember = false
+            for i = 1, #entries, 2 do
+              local encodedUser, lastSeen = string.match(entries[i + 1], '^([^|]*)|[^|]*|[^|]*|(%d+)$')
+              if encodedUser and now - tonumber(lastSeen) <= tonumber(ARGV[6]) then
+                if not users[encodedUser] then
+                  users[encodedUser] = true
+                  count = count + 1
+                end
+                if encodedUser == ARGV[3] then isMember = true end
+              end
+            end
+            local recentSeen = redis.call('HGET', KEYS[2], ARGV[2])
+            local wasRecent = recentSeen and now - tonumber(recentSeen) <= tonumber(ARGV[7])
+            local locked = redis.call('HGET', KEYS[3], 'locked') == 'true'
+            local hasCapacity = count < tonumber(ARGV[8])
+            if not (isMember or (wasRecent and hasCapacity) or ((not locked) and hasCapacity)) then
+              if locked then return 'locked' end
+              return 'full'
+            end
+            if ARGV[1] ~= ARGV[2] then redis.call('HDEL', KEYS[1], ARGV[2]) end
+            redis.call('HSET', KEYS[1], ARGV[1], ARGV[4])
+            redis.call('HSET', KEYS[2], ARGV[2], ARGV[5])
+            return 'ok'
+            """, String.class);
 
     private final StringRedisTemplate redisTemplate;
     private final Duration roomStateTtl;
@@ -260,15 +293,13 @@ public class EphemeralRoomStateService {
             normalizedUserId = java.util.UUID.randomUUID().toString();
         }
 
-        RoomAccessDto access = roomAccess(code, normalizedUserId, displayName);
-        if (!access.canJoin() && !activeUserExists(code, normalizedUserId)) {
-            throw new IllegalStateException(access.reason() == null ? "Room unavailable" : access.reason());
-        }
-
         String presenceId = normalizePresenceId(connectionId, normalizedUserId);
         String normalizedDisplayName = normalizeIdentity(displayName, code);
         String normalizedColor = cursorColor == null || cursorColor.isBlank() ? nextCursorColor(code) : cursorColor;
-        upsertPresence(code, presenceId, normalizedUserId, normalizedDisplayName, normalizedColor);
+        String deniedReason = reservePresence(code, presenceId, normalizedUserId, normalizedDisplayName, normalizedColor);
+        if (deniedReason != null) {
+            throw new IllegalStateException(deniedReason);
+        }
         markRoomActive(code);
         log.info("Joined room {} as {} ({})", code, normalizedDisplayName, normalizedColor);
         return new RoomJoinResponse(code, normalizedDisplayName, normalizedColor, activeMemberCount(code), MAX_ROOM_USERS);
@@ -585,30 +616,47 @@ public class EphemeralRoomStateService {
         localRooms.clear();
     }
 
-    private void upsertPresence(String code, String presenceId, String userId, String displayName, String cursorColor) {
-        executeWithFallback(
+    /**
+     * Admits the user and records the connection atomically.
+     *
+     * @return {@code null} when admitted, otherwise the denial reason ("full" or "locked")
+     */
+    private String reservePresence(String code, String presenceId, String userId, String displayName, String cursorColor) {
+        return executeWithFallback(
                 () -> {
-                    if (!presenceId.equals(userId)) {
-                        redisTemplate.opsForHash().delete(roomMembersKey(code), userId);
-                    }
                     long now = System.currentTimeMillis();
-                    redisTemplate.opsForHash().put(roomMembersKey(code), presenceId, encodePresence(userId, displayName, cursorColor, now));
-                    redisTemplate.opsForHash().put(roomRecentMembersKey(code), userId, Long.toString(now));
-                    int activeCount = activeRedisMembers(code).size();
-                    writeActiveCount(code, activeCount);
+                    String result = redisTemplate.execute(RESERVE_PRESENCE,
+                            List.of(roomMembersKey(code), roomRecentMembersKey(code), roomMetaKey(code)),
+                            presenceId, userId, encodeField(userId), encodePresence(userId, displayName, cursorColor, now),
+                            Long.toString(now), Long.toString(MEMBER_STALE_TTL.toMillis()),
+                            Long.toString(RECENT_MEMBER_TTL.toMillis()), Integer.toString(MAX_ROOM_USERS));
+                    if (!"ok".equals(result)) {
+                        return result == null ? "Room unavailable" : result;
+                    }
+                    writeActiveCount(code, activeRedisMembers(code).size());
                     expireRoomKeys(code);
                     return null;
                 },
                 () -> {
                     LocalRoomState state = localState(code);
-                    if (!presenceId.equals(userId)) {
-                        state.members.remove(userId);
+                    synchronized (state) {
+                        pruneExpiredLocalMembers(code, state, false);
+                        boolean isMember = state.members.values().stream().anyMatch(member -> member.userId.equals(userId));
+                        pruneExpiredRecentLocalMembers(state);
+                        boolean wasRecentMember = state.recentMembers.containsKey(userId);
+                        boolean hasCapacity = countUniqueLocalUsers(state) < MAX_ROOM_USERS;
+                        if (!(isMember || (wasRecentMember && hasCapacity) || (!state.locked && hasCapacity))) {
+                            return state.locked ? "locked" : "full";
+                        }
+                        if (!presenceId.equals(userId)) {
+                            state.members.remove(userId);
+                        }
+                        long now = System.currentTimeMillis();
+                        state.members.put(presenceId, new LocalMemberState(userId, displayName, cursorColor, now));
+                        state.recentMembers.put(userId, now);
+                        state.memberCount.set(countUniqueLocalUsers(state));
+                        return null;
                     }
-                    long now = System.currentTimeMillis();
-                    state.members.put(presenceId, new LocalMemberState(userId, displayName, cursorColor, now));
-                    state.recentMembers.put(userId, now);
-                    state.memberCount.set(countUniqueLocalUsers(state));
-                    return null;
                 }
         );
     }
