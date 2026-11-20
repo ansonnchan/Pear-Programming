@@ -1,5 +1,6 @@
 package com.pearprogram.auth;
 
+import com.pearprogram.files.FileService;
 import com.pearprogram.rooms.EphemeralRoomStateService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -12,6 +13,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -20,12 +22,15 @@ public class RealtimeAccessTokenService {
     private final SecureRandom secureRandom = new SecureRandom();
     private final Duration ttl;
     private final EphemeralRoomStateService roomStateService;
+    private final FileService files;
 
     public RealtimeAccessTokenService(
             EphemeralRoomStateService roomStateService,
+            FileService files,
             @Value("${pearprogram.auth.realtime-token-ttl:10m}") Duration ttl
     ) {
         this.roomStateService = roomStateService;
+        this.files = files;
         this.ttl = ttl.isNegative() || ttl.isZero() ? Duration.ofMinutes(10) : ttl;
     }
 
@@ -38,7 +43,7 @@ public class RealtimeAccessTokenService {
         return new IssuedToken(value, OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC));
     }
 
-    public RealtimeTokenValidationResponse validate(String token, String roomCode) {
+    public RealtimeTokenValidationResponse validate(String token, String roomCode, String fileId) {
         if (token == null || token.isBlank() || roomCode == null || roomCode.isBlank()) {
             return new RealtimeTokenValidationResponse(false, null);
         }
@@ -49,8 +54,10 @@ public class RealtimeAccessTokenService {
             }
             return new RealtimeTokenValidationResponse(false, null);
         }
-        boolean member = roomStateService.isActiveMember(normalizeRoomCode(roomCode), record.userId());
-        return new RealtimeTokenValidationResponse(member, member ? record.userId() : null);
+        String normalizedRoomCode = normalizeRoomCode(roomCode);
+        boolean allowed = roomStateService.isActiveMember(normalizedRoomCode, record.userId())
+                && files.isRoomFile(parseUuid(fileId), normalizedRoomCode);
+        return new RealtimeTokenValidationResponse(allowed, allowed ? record.userId() : null);
     }
 
     public void revokeUser(String userId) {
@@ -61,6 +68,14 @@ public class RealtimeAccessTokenService {
     void removeExpiredTokens() {
         Instant now = Instant.now();
         tokens.entrySet().removeIf(entry -> entry.getValue().expiresAt().isBefore(now));
+    }
+
+    private UUID parseUuid(String raw) {
+        try {
+            return raw == null || raw.isBlank() ? null : UUID.fromString(raw.trim());
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     private String normalizeRoomCode(String raw) {

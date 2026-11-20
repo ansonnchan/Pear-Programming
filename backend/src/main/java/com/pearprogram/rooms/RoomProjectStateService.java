@@ -34,9 +34,9 @@ public class RoomProjectStateService {
     }
 
     @Transactional
-    public List<Map<String, Object>> upsertFiles(String roomCode, List<Map<String, Object>> incoming) {
+    public List<Map<String, Object>> updateFileContents(String roomCode, List<Map<String, Object>> incoming) {
         RoomEntity room = requireRoom(roomCode);
-        return files.synchronizeWorkspace(room.getWorkspaceId(), incoming, false).stream().map(this::toMap).toList();
+        return files.updateExistingFileContents(room.getWorkspaceId(), incoming).stream().map(this::toMap).toList();
     }
 
     private RoomEntity requireRoom(String code) {

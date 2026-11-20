@@ -69,6 +69,38 @@ class RoomFlowTests {
     }
 
     @Test
+    void joiningAFullRoomReturnsConflict() throws Exception {
+        MockHttpSession creatorSession = signIn("Creator");
+        String code = mockMvc.perform(post("/api/rooms/create")
+                        .session(creatorSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString()
+                .replaceAll(".*\"code\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+
+        for (int seat = 2; seat <= 5; seat++) {
+            mockMvc.perform(post("/api/rooms/join")
+                            .session(signIn("Pear " + seat))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"code\":\"%s\"}".formatted(code)))
+                    .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(post("/api/rooms/join")
+                        .session(signIn("Sixth Pear"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"%s\"}".formatted(code)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error", equalTo("room_full")));
+    }
+
+    @Test
     void joiningInvalidCodeDoesNotCreateRoom() throws Exception {
         MockHttpSession session = signIn("Joiner");
         mockMvc.perform(post("/api/rooms/join")

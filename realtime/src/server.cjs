@@ -16,6 +16,7 @@ const INTERNAL_SERVICE_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || '';
 const SNAPSHOT_INTERVAL_MS = numberFromEnv('SNAPSHOT_INTERVAL_MS', 30_000);
 const ROOM_TTL_SECONDS = numberFromEnv('ROOM_TTL_SECONDS', 24 * 60 * 60);
 const ROOM_CLEANUP_GRACE_MS = numberFromEnv('ROOM_CLEANUP_GRACE_MS', 120_000);
+const ROOM_CLEANUP_RETRY_MS = numberFromEnv('ROOM_CLEANUP_RETRY_MS', 30_000);
 const REQUIRE_REDIS = booleanFromEnv('REQUIRE_REDIS', false);
 const REDIS_KEY_PREFIX = normalizeRedisKeyPrefix(process.env.PEARPROGRAM_REDIS_KEY_PREFIX || process.env.REDIS_KEY_PREFIX || 'pearprogram');
 const REDIS_CONFIG = redisConfigFromEnv();
@@ -24,6 +25,7 @@ const REDIS_BROADCAST_ORIGIN = Symbol('redis-yjs-broadcast');
 const YJS_BROADCAST_CHANNEL = `${REDIS_KEY_PREFIX}:yjs:broadcast`;
 
 const hydratedDocs = new Set();
+const pendingHydrations = new Map();
 const persistenceAttached = new Set();
 const lastFlushMs = new Map();
 const roomSockets = new Map();
@@ -149,7 +151,7 @@ server.on('upgrade', async (req, socket, head) => {
     return;
   }
 
-  const authenticatedUser = await validateRealtimeAccess(parsed.roomCode, parsed.accessToken);
+  const authenticatedUser = await validateRealtimeAccess(parsed.roomCode, parsed.fileId, parsed.accessToken);
   if (!authenticatedUser) {
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
@@ -166,27 +168,63 @@ server.on('upgrade', async (req, socket, head) => {
   });
 });
 
-wss.on('connection', async (ws, req) => {
+wss.on('connection', (ws, req) => {
+  // Clients send their first sync message as soon as the socket opens. Buffer anything that
+  // arrives while the document hydrates so the sync handshake is not lost.
+  const pendingMessages = [];
+  const bufferMessage = (data, isBinary) => pendingMessages.push([data, isBinary]);
+  ws.on('message', bufferMessage);
+
+  connectHydratedClient(ws, req, pendingMessages, bufferMessage).catch((error) => {
+    log('error', 'Yjs client setup failed', { room: req.pearRoomCode, fileId: req.pearFileId, error: error.message });
+    ws.off('message', bufferMessage);
+    ws.close(1011, 'Document unavailable');
+  });
+});
+
+async function connectHydratedClient(ws, req, pendingMessages, bufferMessage) {
   const { pearDocName: docName, pearRoomCode: roomCode, pearFileId: fileId } = req;
   const doc = getYDoc(docName);
+  await ensureHydrated(doc, docName, roomCode, fileId);
 
-  if (!hydratedDocs.has(docName)) {
-    hydratedDocs.add(docName);
-    await hydrateDoc(doc, roomCode, fileId);
+  ws.off('message', bufferMessage);
+  if (ws.readyState !== ws.OPEN) {
+    if (!roomSockets.has(roomCode)) {
+      scheduleRoomCleanup(roomCode);
+    }
+    return;
   }
 
   setupWSConnection(ws, req, { docName });
+  for (const [data, isBinary] of pendingMessages) {
+    ws.emit('message', data, isBinary);
+  }
   trackRoomConnection(roomCode, ws);
   attachRedisPersistence(doc, roomCode, fileId);
   log('info', 'Yjs client connected', { room: roomCode, fileId, activeDocs: docs.size });
-});
+}
+
+function ensureHydrated(doc, docName, roomCode, fileId) {
+  if (hydratedDocs.has(docName)) {
+    return Promise.resolve();
+  }
+  let hydration = pendingHydrations.get(docName);
+  if (!hydration) {
+    hydration = hydrateDoc(doc, roomCode, fileId).finally(() => {
+      hydratedDocs.add(docName);
+      pendingHydrations.delete(docName);
+    });
+    pendingHydrations.set(docName, hydration);
+  }
+  return hydration;
+}
 
 setInterval(() => {
   flushSnapshots().catch((error) => log('error', 'Snapshot flush loop failed', { error: error.message }));
 }, SNAPSHOT_INTERVAL_MS).unref();
 
 server.listen(PORT, () => {
-  log('info', 'PearProgram y-websocket service listening', { port: PORT });
+  log('info', 'Pear Programming y-websocket service listening', { port: PORT });
 });
 
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
@@ -264,7 +302,7 @@ function parseDocRequest(req) {
   };
 }
 
-async function validateRealtimeAccess(roomCode, accessToken) {
+async function validateRealtimeAccess(roomCode, fileId, accessToken) {
   if (!AUTH_VALIDATION_ENDPOINT || !accessToken) {
     return null;
   }
@@ -273,6 +311,7 @@ async function validateRealtimeAccess(roomCode, accessToken) {
     const endpoint = new URL(AUTH_VALIDATION_ENDPOINT);
     endpoint.searchParams.set('token', accessToken);
     endpoint.searchParams.set('roomCode', roomCode);
+    endpoint.searchParams.set('fileId', fileId);
     const response = await fetch(endpoint, {
       headers: internalServiceHeaders(),
       signal: AbortSignal.timeout(3000)
@@ -302,7 +341,7 @@ async function hydratePostgresSnapshot(doc, roomCode, fileId) {
   }
 
   try {
-    const response = await fetch(`${SNAPSHOT_ENDPOINT}/${fileId}/snapshot`, {
+    const response = await fetch(`${SNAPSHOT_ENDPOINT}/${encodeURIComponent(fileId)}/snapshot?roomCode=${encodeURIComponent(roomCode)}`, {
       headers: internalServiceHeaders(),
       signal: AbortSignal.timeout(2500)
     });
@@ -363,7 +402,6 @@ function attachRedisPersistence(doc, roomCode, fileId) {
       return;
     }
 
-    logMetric('yjs_sync_delay_ms', 0, roomCode);
     if (!redis || !redisAvailable) {
       return;
     }
@@ -475,16 +513,18 @@ async function flushSnapshots() {
 
 async function flushRoomSnapshots(roomCode) {
   const prefix = `${roomCode}:`;
-  for (const [docName, doc] of docs.entries()) {
+  const results = new Map();
+  for (const [docName, doc] of [...docs.entries()]) {
     if (docName.startsWith(prefix)) {
-      await flushSnapshot(docName, doc);
+      results.set(docName, await flushSnapshot(docName, doc));
     }
   }
+  return results;
 }
 
 async function flushSnapshot(docName, doc) {
   if (!SNAPSHOT_ENDPOINT) {
-    return;
+    return true;
   }
 
   const [roomCode, fileId] = docName.split(':');
@@ -506,9 +546,12 @@ async function flushSnapshot(docName, doc) {
 
     if (!response.ok) {
       log('warn', 'Snapshot flush returned non-OK status', { room: roomCode, fileId, status: response.status });
+      return false;
     }
+    return true;
   } catch (error) {
     log('warn', 'Snapshot flush failed', { room: roomCode, fileId, error: error.message });
+    return false;
   }
 }
 
@@ -570,52 +613,62 @@ async function cleanupInactiveRoom(roomCode) {
     return;
   }
 
-  await flushRoomSnapshots(roomCode);
-  const removedDocs = cleanupInMemoryRoomDocs(roomCode);
-  const removedRedisKeys = await cleanupRedisRoomDocs(roomCode);
+  const flushResults = await flushRoomSnapshots(roomCode);
+  if (roomSockets.has(roomCode)) {
+    log('info', 'Skipped Yjs room cleanup because users reconnected during the snapshot flush', { room: roomCode });
+    return;
+  }
+
+  // Only evict documents whose final state reached PostgreSQL. Their Redis update logs are the
+  // only other copy of unsaved edits, so failed documents keep both until a retry succeeds.
+  const persistedDocs = [...flushResults].filter(([, persisted]) => persisted).map(([docName]) => docName);
+  const failedDocs = [...flushResults].filter(([, persisted]) => !persisted).map(([docName]) => docName);
+  const removedDocs = cleanupInMemoryRoomDocs(persistedDocs);
+  const removedRedisKeys = await cleanupRedisRoomDocs(persistedDocs);
+
+  if (failedDocs.length > 0) {
+    log('warn', 'Kept unsaved Yjs documents until their snapshots persist', { room: roomCode, failedDocs: failedDocs.length });
+    scheduleCleanupRetry(roomCode, ROOM_CLEANUP_RETRY_MS, 'snapshot flush failed');
+    return;
+  }
+
   const backendResult = await notifyBackendRoomCleanup(roomCode);
   if (backendResult?.reason === 'pending' && !roomSockets.has(roomCode)) {
-    scheduleBackendCleanupRetry(roomCode);
+    scheduleCleanupRetry(roomCode, 5_000, 'backend cleanup pending');
   }
   log('info', 'Cleaned up inactive Yjs room state', { room: roomCode, removedDocs, removedRedisKeys });
 }
 
-function scheduleBackendCleanupRetry(roomCode) {
+function scheduleCleanupRetry(roomCode, retryMs, reason) {
   cancelRoomCleanup(roomCode);
   const timer = setTimeout(() => {
     roomCleanupTimers.delete(roomCode);
     if (!roomSockets.has(roomCode)) {
       cleanupInactiveRoom(roomCode).catch((error) => log('warn', 'Room cleanup retry failed', { room: roomCode, error: error.message }));
     }
-  }, 5_000);
+  }, retryMs);
   timer.unref?.();
   roomCleanupTimers.set(roomCode, timer);
-  log('info', 'Scheduled backend room cleanup retry', { room: roomCode, retryMs: 5_000 });
+  log('info', 'Scheduled room cleanup retry', { room: roomCode, retryMs, reason });
 }
 
-async function cleanupRedisRoomDocs(roomCode) {
-  if (!redisAvailable || !redis) {
+async function cleanupRedisRoomDocs(docNames) {
+  if (!redisAvailable || !redis || docNames.length === 0) {
     return 0;
   }
-  let cursor = '0';
-  let removed = 0;
-  const pattern = `${REDIS_KEY_PREFIX}:yjs:${roomCode}:*:updates`;
-  do {
-    const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
-    cursor = nextCursor;
-    if (keys.length > 0) {
-      removed += await redis.del(...keys);
-    }
-  } while (cursor !== '0');
-  return removed;
+  const keys = docNames.map((docName) => {
+    const [roomCode, fileId] = docName.split(':');
+    return redisKey(roomCode, fileId);
+  });
+  return redis.del(...keys);
 }
 
-function cleanupInMemoryRoomDocs(roomCode) {
-  const prefix = `${roomCode}:`;
+function cleanupInMemoryRoomDocs(docNames) {
   let removed = 0;
 
-  for (const [docName, doc] of docs.entries()) {
-    if (!docName.startsWith(prefix)) {
+  for (const docName of docNames) {
+    const doc = docs.get(docName);
+    if (!doc) {
       continue;
     }
 

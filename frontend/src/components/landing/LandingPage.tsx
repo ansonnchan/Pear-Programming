@@ -59,7 +59,7 @@ export function LandingPage({
         <div className="landing-copy">
           <div className="landing-hero-brand">
             <img alt="" src={pearLogoUrl} />
-            <span>PearProgramming</span>
+            <span>Pear Programming</span>
           </div>
           <p className="landing-subheading">Pair program together. Real-time coding rooms.</p>
           <h1>
@@ -67,12 +67,12 @@ export function LandingPage({
             <span><strong>friendly</strong> IDE in real time.</span>
           </h1>
           <p className="landing-lede">
-            PearProgramming is a collaborative coding platform where teams can write code together in real time,
+            Pear Programming is a collaborative coding platform where teams can write code together in real time,
             chat alongside their work, and stay in sync in a shared browser IDE. Rooms are limited to <strong> five pears </strong>for smooth collaboration.
           </p>
 
-          <h2 className="landing-feature-heading">What makes PearProgramming special?</h2>
-          <div aria-label="PearProgramming highlights" className="landing-features">
+          <h2 className="landing-feature-heading">What makes Pear Programming special?</h2>
+          <div aria-label="Pear Programming highlights" className="landing-features">
             <article>
               <span className="landing-feature-icon"><Sparkles size={18} /></span>
               <div><strong>Real-time collaboration</strong><small>Edit and build together. See every change as it happens.</small></div>

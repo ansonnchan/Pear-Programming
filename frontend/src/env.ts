@@ -25,7 +25,7 @@ export function logResolvedFrontendEnv(values: { apiUrl: string; stompUrl: strin
     return;
   }
 
-  console.info('[PearProgramming env]', {
+  console.info('[Pear Programming env]', {
     apiUrl: values.apiUrl,
     stompUrl: values.stompUrl,
     yjsUrl: values.yjsUrl || '<not configured>'

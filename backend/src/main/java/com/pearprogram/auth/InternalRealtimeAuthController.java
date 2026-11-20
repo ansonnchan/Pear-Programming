@@ -17,8 +17,9 @@ public class InternalRealtimeAuthController {
     @GetMapping("/validate")
     public RealtimeTokenValidationResponse validate(
             @RequestParam String token,
-            @RequestParam String roomCode
+            @RequestParam String roomCode,
+            @RequestParam(required = false) String fileId
     ) {
-        return tokens.validate(token, roomCode);
+        return tokens.validate(token, roomCode, fileId);
     }
 }

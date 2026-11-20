@@ -60,6 +60,25 @@ class Judge0ExecutionProviderTests {
     }
 
     @Test
+    void reportsTheProviderStatusForRejectedRequests() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://judge0.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(ExpectedCount.once(), requestTo(containsString("/submissions")))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"message\":\"You are not subscribed to this API.\"}"));
+        Judge0ExecutionProvider provider = provider(builder, properties());
+
+        assertThatThrownBy(() -> provider.submit(new ProviderExecutionRequest(71, "print(1)", "", 5)))
+                .isInstanceOfSatisfying(ExecutionProviderException.class, exception -> {
+                    assertThat(exception.isTransientFailure()).isFalse();
+                    assertThat(exception.getMessage()).contains("HTTP 403");
+                });
+        assertThat(Judge0ExecutionProvider.hint(403)).contains("JUDGE0_API_KEY");
+        assertThat(Judge0ExecutionProvider.snippet("x".repeat(400))).hasSize(303);
+        server.verify();
+    }
+
+    @Test
     void readsSuccessfulSubmissionAndStatusResponses() {
         ExecutionProperties properties = properties();
         RestClient.Builder builder = RestClient.builder().baseUrl("http://judge0.test");

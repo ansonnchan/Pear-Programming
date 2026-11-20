@@ -1,5 +1,7 @@
 package com.pearprogram.files;
 
+import com.pearprogram.persistence.DatabaseTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -35,7 +37,7 @@ public class FileSnapshotEntity {
     public void update(String encodedState, String plainText) {
         this.encodedState = encodedState;
         this.plainText = plainText;
-        this.updatedAt = OffsetDateTime.now();
+        this.updatedAt = DatabaseTime.now();
     }
 
     public UUID getFileId() { return fileId; }

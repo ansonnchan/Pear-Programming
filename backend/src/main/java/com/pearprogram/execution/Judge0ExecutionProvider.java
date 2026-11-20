@@ -51,12 +51,14 @@ public class Judge0ExecutionProvider implements ExecutionProvider {
         try {
             String token = objectMapper.readTree(raw == null ? "{}" : raw).path("token").asText("").trim();
             if (token.isBlank()) {
+                log.warn("Judge0 submission response did not include a token. body={}", snippet(raw));
                 throw new ExecutionProviderException("Execution provider returned an invalid submission response", false);
             }
             return token;
         } catch (ExecutionProviderException exception) {
             throw exception;
         } catch (Exception exception) {
+            log.warn("Judge0 submission response was not valid JSON. body={}", snippet(raw));
             throw new ExecutionProviderException("Execution provider returned a malformed submission response", false, exception);
         }
     }
@@ -70,8 +72,10 @@ public class Judge0ExecutionProvider implements ExecutionProvider {
         try {
             return normalize(objectMapper.readTree(raw == null ? "{}" : raw));
         } catch (ExecutionProviderException exception) {
+            log.warn("Judge0 status response could not be used. reason={} body={}", exception.getMessage(), snippet(raw));
             throw exception;
         } catch (Exception exception) {
+            log.warn("Judge0 status response was not valid JSON. body={}", snippet(raw));
             throw new ExecutionProviderException("Execution provider returned a malformed status response", false, exception);
         }
     }
@@ -112,10 +116,15 @@ public class Judge0ExecutionProvider implements ExecutionProvider {
             } catch (RestClientResponseException exception) {
                 boolean transientFailure = isTransient(exception.getStatusCode());
                 if (!transientFailure || attempt == maxAttempts) {
-                    throw new ExecutionProviderException("Execution provider request failed", transientFailure, exception);
+                    int status = exception.getStatusCode().value();
+                    log.warn("Judge0 {} request failed. status={} hint={} body={}", operation, status, hint(status),
+                            snippet(exception.getResponseBodyAsString()));
+                    throw new ExecutionProviderException("Execution provider request failed with HTTP " + status,
+                            transientFailure, exception);
                 }
             } catch (RestClientException exception) {
                 if (attempt == maxAttempts) {
+                    log.warn("Judge0 {} request could not reach the provider. reason={}", operation, rootMessage(exception));
                     throw new ExecutionProviderException("Execution provider is unavailable", true, exception);
                 }
             }
@@ -125,6 +134,32 @@ public class Judge0ExecutionProvider implements ExecutionProvider {
             sleep(delay);
         }
         throw new ExecutionProviderException("Execution provider request failed", true);
+    }
+
+    static String hint(int status) {
+        return switch (status) {
+            case 401, 403 -> "check JUDGE0_API_KEY, JUDGE0_API_HOST, and the provider subscription";
+            case 404 -> "check JUDGE0_BASE_URL";
+            case 422 -> "check the language ID against the provider's /languages response";
+            case 429 -> "the provider quota or rate limit was reached";
+            default -> status >= 500 ? "the provider reported a server error" : "unexpected provider response";
+        };
+    }
+
+    static String snippet(String body) {
+        if (body == null || body.isBlank()) {
+            return "<empty>";
+        }
+        String normalized = body.replaceAll("\\s+", " ").trim();
+        return normalized.length() <= 300 ? normalized : normalized.substring(0, 300) + "...";
+    }
+
+    private static String rootMessage(Throwable error) {
+        Throwable root = error;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        return root.getMessage() == null ? root.getClass().getSimpleName() : root.getMessage();
     }
 
     private boolean isTransient(HttpStatusCode status) {

@@ -137,6 +137,7 @@ export type RoomSessionState = {
   explorerOpen: boolean;
   landingCode: string;
   chatDraft: string;
+  filesOmitted?: boolean;
 };
 
 export type ExecutionStatus =

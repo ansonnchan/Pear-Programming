@@ -1,5 +1,7 @@
 package com.pearprogram.workspaces;
 
+import com.pearprogram.persistence.DatabaseTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -40,7 +42,7 @@ public class WorkspaceMemberEntity {
         this.workspaceId = workspaceId;
         this.userId = userId;
         this.role = role;
-        this.createdAt = OffsetDateTime.now();
+        this.createdAt = DatabaseTime.now();
     }
 
     public UUID getId() { return id; }

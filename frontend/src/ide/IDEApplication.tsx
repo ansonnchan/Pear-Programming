@@ -211,6 +211,8 @@ export function IDEApplication() {
   const cursorSentAtRef = useRef(0);
   const saveTimerRef = useRef<number | null>(null);
   const suppressEditorChangeRef = useRef(false);
+  const applyingRemoteYjsEditRef = useRef(false);
+  const yjsBoundRef = useRef(false);
   const pendingUploadRef = useRef<{ proposalId: string; candidates: UploadCandidate[]; newFolder: string; openUploaded: boolean } | null>(null);
   const pendingUploadSyncRef = useRef<ProjectSwitchEvent[]>([]);
   const committingProposalRef = useRef<string | null>(null);
@@ -331,14 +333,20 @@ export function IDEApplication() {
       }
       const content = editor.getValue();
       const updatedAt = new Date().toISOString();
-      lastLocalEditAtRef.current = Date.now();
+      const remoteEdit = applyingRemoteYjsEditRef.current;
+      if (!remoteEdit) {
+        lastLocalEditAtRef.current = Date.now();
+      }
       const nextFiles = filesRef.current.map((file) => (
         file.id === currentFile.id ? { ...file, content, updatedAt } : file
       ));
       filesRef.current = nextFiles;
       setFiles(nextFiles);
-      scheduleAutosave(currentFile.id, content);
-      scheduleContentBroadcast(currentFile.id, content, updatedAt);
+      // The collaborator who typed an edit saves and broadcasts it; peers only mirror it locally.
+      if (!remoteEdit) {
+        scheduleAutosave(currentFile.id, content);
+        scheduleContentBroadcast(currentFile.id, content, updatedAt);
+      }
     });
 
     editor.onDidChangeCursorPosition((event) => {
@@ -464,6 +472,8 @@ export function IDEApplication() {
   });
 
   const { peerCount, syncStatus } = useCollaborativeDocument({
+    applyingRemoteEdit: applyingRemoteYjsEditRef,
+    bound: yjsBoundRef,
     editor: editorRef,
     editorMountVersion,
     file: activeFile,
@@ -1144,7 +1154,7 @@ export function IDEApplication() {
       );
       if (!hasFolderPaths) {
         input.value = '';
-        setUploadNotice('Please choose a folder so PearProgramming can preserve the project structure.');
+        setUploadNotice('Please choose a folder so Pear Programming can preserve the project structure.');
         setSaveState('error');
         return;
       }
@@ -1302,7 +1312,9 @@ export function IDEApplication() {
       }
 
       appliedIncomingIds.add(incoming.id);
-      if (file.id === activeId && hasRecentLocalEdit) {
+      // Yjs is authoritative for the bound active file. Replacing the model from a STOMP snapshot
+      // would overwrite newer CRDT edits for every collaborator.
+      if (file.id === activeId && (hasRecentLocalEdit || yjsBoundRef.current)) {
         return file;
       }
 
@@ -1445,8 +1457,8 @@ export function IDEApplication() {
 
     if (event.type === 'sync') {
       if (event.targetUserId === user.id && Array.isArray(event.files)) {
-        const nextFiles = applyUploadedFiles(event.files, event.replaceExisting ?? true, event.openUploaded ?? false);
-        persistRoomFilesSnapshot(nextFiles);
+        // The lead's tree is already persisted; a joiner only needs to adopt it locally.
+        applyUploadedFiles(event.files, event.replaceExisting ?? true, event.openUploaded ?? false);
       }
       return;
     }
@@ -1471,8 +1483,8 @@ export function IDEApplication() {
 
     if (event.type === 'accepted') {
       if (Array.isArray(event.files) && event.proposerId !== user.id) {
-        const nextFiles = applyUploadedFiles(event.files, event.replaceExisting ?? true, event.openUploaded ?? false);
-        persistRoomFilesSnapshot(nextFiles);
+        // The proposer persisted the accepted upload before announcing it.
+        applyUploadedFiles(event.files, event.replaceExisting ?? true, event.openUploaded ?? false);
       }
       pendingUploadRef.current = null;
       committingProposalRef.current = null;

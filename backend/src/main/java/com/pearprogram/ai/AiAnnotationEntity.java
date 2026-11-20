@@ -1,5 +1,7 @@
 package com.pearprogram.ai;
 
+import com.pearprogram.persistence.DatabaseTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -46,7 +48,7 @@ public class AiAnnotationEntity {
         this.lineNumber = lineNumber;
         this.content = content;
         this.dismissed = false;
-        this.createdAt = OffsetDateTime.now();
+        this.createdAt = DatabaseTime.now();
     }
 
     public void dismiss() { this.dismissed = true; }

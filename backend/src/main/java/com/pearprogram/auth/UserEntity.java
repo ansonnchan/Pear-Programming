@@ -1,5 +1,7 @@
 package com.pearprogram.auth;
 
+import com.pearprogram.persistence.DatabaseTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -33,7 +35,7 @@ public class UserEntity {
     }
 
     public UserEntity(UUID id, String displayName, String avatarUrl) {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = DatabaseTime.now();
         this.id = id;
         this.displayName = displayName;
         this.avatarUrl = avatarUrl;
@@ -45,7 +47,7 @@ public class UserEntity {
     public void updateProfile(String displayName, String avatarUrl) {
         this.displayName = displayName;
         this.avatarUrl = avatarUrl;
-        this.updatedAt = OffsetDateTime.now();
+        this.updatedAt = DatabaseTime.now();
     }
 
     public UUID getId() { return id; }

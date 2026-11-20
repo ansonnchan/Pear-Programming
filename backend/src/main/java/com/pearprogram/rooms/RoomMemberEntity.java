@@ -1,5 +1,7 @@
 package com.pearprogram.rooms;
 
+import com.pearprogram.persistence.DatabaseTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -33,7 +35,7 @@ public class RoomMemberEntity {
     }
 
     public RoomMemberEntity(UUID roomId, UUID userId) {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = DatabaseTime.now();
         this.id = UUID.randomUUID();
         this.roomId = roomId;
         this.userId = userId;
@@ -42,7 +44,7 @@ public class RoomMemberEntity {
     }
 
     public void touch() {
-        this.lastSeenAt = OffsetDateTime.now();
+        this.lastSeenAt = DatabaseTime.now();
     }
 
     public UUID getId() { return id; }

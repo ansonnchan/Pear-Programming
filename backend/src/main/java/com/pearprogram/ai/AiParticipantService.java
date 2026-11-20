@@ -23,7 +23,7 @@ public class AiParticipantService {
     public static final String DISPLAY_NAME = "PearAI";
 
     public static final String SYSTEM_PROMPT = """
-            You are PearAI, a collaborative coding assistant inside PearProgram.
+            You are PearAI, a collaborative coding assistant inside Pear Programming.
              You are a room participant alongside human developers. You can see
              who is editing what in real time. Keep responses concise (<=3
              sentences for chat, <=2 sentences for inline annotations). Always
