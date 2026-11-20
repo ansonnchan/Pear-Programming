@@ -1,4 +1,4 @@
-import { Bot, MessageCircle, PanelRightClose, Send } from 'lucide-react';
+import { Bot, PanelRightClose, Send } from 'lucide-react';
 import { type KeyboardEvent, type ReactNode, type RefObject, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage, Member } from '../../types';
 import { insertMentionText, mentionFragmentAt, mentionMatches, type MentionFragment, type MentionOption } from './mention';
@@ -152,9 +152,9 @@ export function ChatPanel({
   return (
     <aside className="chat" id="room-chat">
       <div className="pane-title-row chat-title-row">
-        <span className="pane-title">Room chat</span>
+        <span className="pane-title">Chat</span>
         <div className="chat-title-tools">
-          <span className="shared-label">{nowLabel}</span>
+          <span className="sr-only">{nowLabel}</span>
           <button aria-label="Hide room chat" className="icon-button panel-minimize-button" onClick={onClose} title="Hide room chat" type="button">
             <PanelRightClose size={16} />
           </button>
@@ -162,11 +162,7 @@ export function ChatPanel({
       </div>
       <div className="messages" onScroll={handleMessageScroll} ref={messageListRef}>
         {messages.length === 0 && (
-          <div className="chat-empty-state">
-            <span className="chat-empty-icon"><MessageCircle size={18} /></span>
-            <strong>The room is quiet</strong>
-            <span>Say hello when your coding partner arrives.</span>
-          </div>
+          <p className="chat-empty-state">Say hi, or mention @PearAI for help with your code.</p>
         )}
         {messages.map((message) => {
           const participant = mentionOptions.find((option) => option.id === message.userId);

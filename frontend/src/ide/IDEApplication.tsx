@@ -310,19 +310,29 @@ export function IDEApplication() {
     editorRef.current = editor;
     monacoRef.current = monaco;
     setEditorMountVersion((version) => version + 1);
-    monaco.editor.defineTheme('pear-github-dark', {
-      base: 'vs-dark',
+    monaco.editor.defineTheme('pear-light', {
+      base: 'vs',
       inherit: true,
       rules: [],
       colors: {
-        'editor.background': '#1a1c18',
-        'editorGutter.background': '#1a1c18',
-        'editorLineNumber.foreground': '#77796e',
-        'editorCursor.foreground': '#58a6ff',
-        'editor.selectionBackground': '#3d5261'
+        'editor.background': '#fffefb',
+        'editorGutter.background': '#fffefb',
+        'editorLineNumber.foreground': '#b8ad98',
+        'editorLineNumber.activeForeground': '#726b5c',
+        'editor.lineHighlightBackground': '#f7f2e8',
+        'editor.lineHighlightBorder': '#00000000',
+        'editorCursor.foreground': '#45602a',
+        'editor.selectionBackground': '#dfe8c4',
+        'editor.inactiveSelectionBackground': '#ece7da',
+        'editorIndentGuide.background1': '#efe8da',
+        'editorWidget.background': '#fffcf6',
+        'editorWidget.border': '#e7ddcc',
+        'editorSuggestWidget.background': '#fffcf6',
+        'editorSuggestWidget.border': '#e7ddcc',
+        'editorSuggestWidget.selectedBackground': '#eef3dc'
       }
     });
-    monaco.editor.setTheme('pear-github-dark');
+    monaco.editor.setTheme('pear-light');
 
     editor.onDidChangeModelContent(() => {
       if (suppressEditorChangeRef.current) {
@@ -723,10 +733,11 @@ export function IDEApplication() {
         <span>Ln {cursorPosition.line}, Col {cursorPosition.col}</span>
         <span className="sync-status">
           {stompConnected ? <Wifi size={13} /> : <WifiOff size={13} />}
-          {syncStatus} - {peerCount} peers
+          {syncStatus.replace(/^Yjs /, '').replace(/^\w/, (letter) => letter.toUpperCase())}
+          {peerCount > 1 && ` · ${peerCount} editing`}
         </span>
         <span>{saveStatusText(saveState, lastSavedAt)}</span>
-        <span className="encoding">UTF-8 - LF</span>
+        <span className="encoding">UTF-8 · LF</span>
       </footer>
 
       {uploadModalOpen && (

@@ -1,5 +1,5 @@
 import Editor, { type OnMount } from '@monaco-editor/react';
-import { Braces, FolderPlus, Upload, UsersRound, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import { languageClass, type ExecutionLanguage, type ExecutionLanguageOption } from '../../language';
 import type { ExecutionResult, WorkspaceFile } from '../../types';
@@ -61,17 +61,19 @@ export function EditorWorkspace({
 }: EditorWorkspaceProps) {
   return (
     <section className={`editor-area ${consoleResizing ? 'console-resizing' : ''}`}>
-      <ExecutionToolbar
-        activeFile={Boolean(activeFile)}
-        consoleOpen={consoleOpen}
-        language={executionLanguage}
-        languages={executionLanguages}
-        onLanguageChange={onLanguageChange}
-        onRun={onRun}
-        onToggleConsole={onToggleConsole}
-        submitting={executionSubmitting}
-      />
-      <EditorTabs activeFileId={activeFile?.id ?? null} files={openFiles} onActivate={onActiveFileChange} onClose={onCloseFile} />
+      <div className="editor-toolbar-row">
+        <EditorTabs activeFileId={activeFile?.id ?? null} files={openFiles} onActivate={onActiveFileChange} onClose={onCloseFile} />
+        <ExecutionToolbar
+          activeFile={Boolean(activeFile)}
+          consoleOpen={consoleOpen}
+          language={executionLanguage}
+          languages={executionLanguages}
+          onLanguageChange={onLanguageChange}
+          onRun={onRun}
+          onToggleConsole={onToggleConsole}
+          submitting={executionSubmitting}
+        />
+      </div>
       <div className="editor-stack" ref={editorStackRef}>
         <div className="editor-frame">
           {activeFile ? (
@@ -94,7 +96,7 @@ export function EditorWorkspace({
                 tabSize: 2
               }}
               path={activeFile.path}
-              theme="pear-github-dark"
+              theme="pear-light"
               defaultValue={activeFile.content}
             />
           ) : (
@@ -164,25 +166,11 @@ export function EditorTabs({ activeFileId, files, onActivate, onClose }: EditorT
 export function EmptyEditorState({ onOpenUpload }: { onOpenUpload: () => void }) {
   return (
     <div className="empty-editor">
-      <div className="empty-editor-content">
-        <div aria-hidden="true" className="empty-editor-sketch">
-          <div className="empty-sketch-window">
-            <div className="empty-sketch-window-bar"><span /><span /><span /><em>shared-room.js</em></div>
-            <div className="empty-sketch-code">
-              <span><i>1</i><code>const room = <strong>'together'</strong>;</code></span>
-              <span><i>2</i><code>shareIdeas(room);</code></span>
-              <span><i>3</i><code>grow(<strong>'side by side'</strong>);</code></span>
-            </div>
-          </div>
-          <div className="empty-sketch-caption"><Braces size={17} /><span>Pair-ready workspace</span><UsersRound size={17} /></div>
-        </div>
-        <h1>Upload files or a project folder to start coding together.</h1>
-        <p>Your shared file tree will appear here after uploading.</p>
-        <div className="empty-editor-actions">
-          <button onClick={onOpenUpload} type="button"><Upload size={16} />Upload Files</button>
-          <button onClick={onOpenUpload} type="button"><FolderPlus size={16} />Upload Folder</button>
-        </div>
-      </div>
+      <p>
+        Open a file from the sidebar, or{' '}
+        <button className="link-button" onClick={onOpenUpload} type="button">upload a project</button>
+        {' '}to start coding together.
+      </p>
     </div>
   );
 }

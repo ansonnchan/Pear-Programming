@@ -1,7 +1,4 @@
-import { Bot, Leaf, MessageCircle, Sparkles } from 'lucide-react';
 import pearLogoUrl from '../../../assets/favicon.png';
-import landingCozyDeskUrl from '../../../assets/landing-cozy-desk.webp';
-import landingCozyRoomUrl from '../../../assets/landing-cozy-room.webp';
 
 type LandingPageProps = {
   backendWakeUrl: string;
@@ -28,83 +25,26 @@ export function LandingPage({
   onJoin,
   realtimeWakeUrl
 }: LandingPageProps) {
+  const busy = creating || joining;
+
   return (
-    <main className="landing-shell">
-      <div aria-hidden="true" className="landing-paper-grain" />
-      <img alt="" aria-hidden="true" className="landing-cozy-desk" src={landingCozyDeskUrl} />
-      <img alt="" aria-hidden="true" className="landing-cozy-scene" src={landingCozyRoomUrl} />
+    <main className="landing">
+      <div className="landing-inner">
+        <header className="landing-brand">
+          <img alt="" src={pearLogoUrl} />
+          <h1>Pear Programming</h1>
+        </header>
+        <p className="landing-tagline">
+          Real-time pair programming in the browser. Share a room code, edit together, and run code.
+        </p>
 
-      <aside aria-label="Free tier service notice" className="render-tier-banner" role="status">
-        <div className="render-tier-message">
-          <Leaf aria-hidden="true" size={13} />
-          <strong>Free tier wake-up:</strong>
-          <span>First room creation can take 1–2 minutes while the backend and real-time services start.</span>
-        </div>
-        <span className="render-tier-instruction">Please click both links below to start the instances.</span>
-        <div className="render-tier-links">
-          {backendWakeUrl && (
-            <a href={backendWakeUrl} rel="noreferrer" target="_blank">
-              {backendWakeUrl}
-            </a>
-          )}
-          {realtimeWakeUrl && (
-            <a href={realtimeWakeUrl} rel="noreferrer" target="_blank">
-              {realtimeWakeUrl}
-            </a>
-          )}
-        </div>
-      </aside>
+        <section aria-labelledby="room-card-title" className="landing-card">
+          <h2 className="sr-only" id="room-card-title">Create or join a room</h2>
+          <button className="primary-button landing-create" disabled={busy} onClick={onCreate} type="button">
+            {creating ? 'Preparing your room…' : 'Create room'}
+          </button>
 
-      <section className="landing-hero" id="landing-home">
-        <div className="landing-copy">
-          <div className="landing-hero-brand">
-            <img alt="" src={pearLogoUrl} />
-            <span>Pear Programming</span>
-          </div>
-          <p className="landing-subheading">Pair program together. Real-time coding rooms.</p>
-          <h1>
-            <span>Code with others in a <strong>pear-ly</strong></span>
-            <span><strong>friendly</strong> IDE in real time.</span>
-          </h1>
-          <p className="landing-lede">
-            Pear Programming is a collaborative coding platform where teams can write code together in real time,
-            chat alongside their work, and stay in sync in a shared browser IDE. Rooms are limited to <strong> five pears </strong>for smooth collaboration.
-          </p>
-
-          <h2 className="landing-feature-heading">What makes Pear Programming special?</h2>
-          <div aria-label="Pear Programming highlights" className="landing-features">
-            <article>
-              <span className="landing-feature-icon"><Sparkles size={18} /></span>
-              <div><strong>Real-time collaboration</strong><small>Edit and build together. See every change as it happens.</small></div>
-            </article>
-            <article>
-              <span className="landing-feature-icon"><MessageCircle size={18} /></span>
-              <div><strong>Chat &amp; code together</strong><small>Discuss ideas and solve problems without leaving the room.</small></div>
-            </article>
-            <article>
-              <span className="landing-feature-icon"><Bot size={18} /></span>
-              <div><strong>PearAI assistant</strong><small>Your context-aware coding companion. Mention @PearAI to begin.</small></div>
-            </article>
-          </div>
-        </div>
-
-        <section aria-labelledby="room-card-title" className="landing-panel" id="room-actions">
-          <div className="room-card-heading">
-            <h2 id="room-card-title">Create or Join a Room</h2>
-            <p>Start empty, then upload your project.</p>
-          </div>
-
-          <div className="room-create-block" id="landing-create">
-            <div>
-              <strong>Start a new room</strong>
-              <small>Open an empty shared workspace as the Lead Pear.</small>
-            </div>
-            <button className="primary-button create-room-button" disabled={creating || joining} onClick={onCreate} type="button">
-              {creating ? 'Preparing your room…' : 'Create Pear Room'}
-            </button>
-          </div>
-
-          <div className="landing-divider"><span>or</span></div>
+          <div className="landing-divider"><span>or join with a code</span></div>
 
           <form
             className="join-form"
@@ -113,7 +53,7 @@ export function LandingPage({
               onJoin();
             }}
           >
-            <label htmlFor="landing-room-code">Enter Room Code</label>
+            <label className="sr-only" htmlFor="landing-room-code">Room code</label>
             <div className="join-form-row">
               <input
                 aria-describedby="landing-room-code-hint"
@@ -121,25 +61,37 @@ export function LandingPage({
                 autoComplete="off"
                 id="landing-room-code"
                 onChange={(event) => onCodeChange(event.target.value)}
-                placeholder="AXXAYB"
+                placeholder="Room code"
                 spellCheck={false}
                 value={code}
               />
-              <button className="secondary-button" disabled={joining || creating} type="submit">
-                {joining ? 'Joining…' : 'Join Pear Room'}
+              <button className="secondary-button" disabled={busy} type="submit">
+                {joining ? 'Joining…' : 'Join'}
               </button>
             </div>
             <small className="sr-only" id="landing-room-code-hint">Six letters or numbers, shared by your Lead Pear.</small>
           </form>
 
-          <p className="landing-room-note">Anyone with the room code can join.</p>
           <div aria-live="polite">
             {notice && <p className="landing-notice" role="status">{notice}</p>}
             {error && <p className="landing-error" role="alert">{error}</p>}
           </div>
         </section>
-      </section>
 
+        <p className="landing-features">
+          Live collaborative editing · Room chat with @PearAI · Runs 14 languages · Up to five pears per room
+        </p>
+
+        {(backendWakeUrl || realtimeWakeUrl) && (
+          <p className="landing-wake">
+            Free hosting: the first room can take a minute to start. Wake the
+            {backendWakeUrl && <> <a href={backendWakeUrl} rel="noreferrer" target="_blank">backend</a></>}
+            {backendWakeUrl && realtimeWakeUrl && ' and'}
+            {realtimeWakeUrl && <> <a href={realtimeWakeUrl} rel="noreferrer" target="_blank">realtime</a></>}
+            {' '}servers early.
+          </p>
+        )}
+      </div>
     </main>
   );
 }

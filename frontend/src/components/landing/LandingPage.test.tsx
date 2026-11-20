@@ -22,37 +22,37 @@ describe('LandingPage', () => {
     const onJoin = vi.fn();
     render(<LandingPage {...baseProps} onCodeChange={onCodeChange} onCreate={onCreate} onJoin={onJoin} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create Pear Room' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
     expect(onCreate).toHaveBeenCalledOnce();
 
-    fireEvent.change(screen.getByLabelText('Enter Room Code'), { target: { value: 'ABC123' } });
+    fireEvent.change(screen.getByLabelText('Room code'), { target: { value: 'ABC123' } });
     expect(onCodeChange).toHaveBeenCalledWith('ABC123');
-    fireEvent.click(screen.getByRole('button', { name: 'Join Pear Room' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }));
     expect(onJoin).toHaveBeenCalledOnce();
   });
 
-  it('presents the create and join forms without redundant shortcut tabs', () => {
-    render(<LandingPage {...baseProps} />);
+  it('keeps the landing page to one create-or-join card without decorative art', () => {
+    const { container } = render(<LandingPage {...baseProps} />);
 
-    expect(screen.queryByRole('navigation', { name: 'Room action shortcuts' })).not.toBeInTheDocument();
-    expect(screen.getByText('Start a new room')).toBeInTheDocument();
-    expect(screen.getByLabelText('Enter Room Code')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Create or join a room' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Room code')).toBeInTheDocument();
+    expect(container.querySelectorAll('img')).toHaveLength(1);
   });
 
   it('exposes compact service wake-up links', () => {
     render(<LandingPage {...baseProps} />);
 
-    expect(screen.getByRole('link', { name: baseProps.backendWakeUrl })).toHaveAttribute('href', baseProps.backendWakeUrl);
-    expect(screen.getByRole('link', { name: baseProps.realtimeWakeUrl })).toHaveAttribute('href', baseProps.realtimeWakeUrl);
+    expect(screen.getByRole('link', { name: 'backend' })).toHaveAttribute('href', baseProps.backendWakeUrl);
+    expect(screen.getByRole('link', { name: 'realtime' })).toHaveAttribute('href', baseProps.realtimeWakeUrl);
   });
 
   it('locks both room actions while an entry request is running', () => {
     const { rerender } = render(<LandingPage {...baseProps} creating />);
     expect(screen.getByRole('button', { name: 'Preparing your room…' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Join Pear Room' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Join' })).toBeDisabled();
 
     rerender(<LandingPage {...baseProps} joining />);
-    expect(screen.getByRole('button', { name: 'Create Pear Room' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create room' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Joining…' })).toBeDisabled();
   });
 
