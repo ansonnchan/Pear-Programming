@@ -5,6 +5,10 @@ import { WebsocketProvider } from 'y-websocket';
 import type { Member, WorkspaceFile } from '../types';
 
 type CollaborativeDocumentOptions = {
+  /** True while Monaco is applying an edit that arrived from another collaborator through Yjs. */
+  applyingRemoteEdit: MutableRefObject<boolean>;
+  /** True while the active file's Monaco model is bound to its Yjs document. */
+  bound: MutableRefObject<boolean>;
   editor: MutableRefObject<unknown>;
   editorMountVersion: number;
   file: WorkspaceFile | null;
@@ -18,6 +22,8 @@ type CollaborativeDocumentOptions = {
 };
 
 export function useCollaborativeDocument({
+  applyingRemoteEdit,
+  bound,
   editor: editorRef,
   editorMountVersion,
   file,
@@ -84,6 +90,16 @@ export function useCollaborativeDocument({
     });
     const yText = ydoc.getText('monaco');
     const yMeta = ydoc.getMap('meta');
+    // MonacoBinding applies remote Yjs edits to the model inside the provider's transaction, so the
+    // editor change handler can tell them apart from local typing.
+    const markRemoteEditStart = (transaction: Y.Transaction) => {
+      if (transaction.origin === provider) applyingRemoteEdit.current = true;
+    };
+    const markRemoteEditEnd = (transaction: Y.Transaction) => {
+      if (transaction.origin === provider) applyingRemoteEdit.current = false;
+    };
+    ydoc.on('beforeTransaction', markRemoteEditStart);
+    ydoc.on('afterTransaction', markRemoteEditEnd);
     const shouldSeedLocalText = roomCode === 'LOCAL1' || !isUuid(file.id);
     if (shouldSeedLocalText && !yMeta.get('initialized')) {
       ydoc.transact(() => {
@@ -121,6 +137,7 @@ export function useCollaborativeDocument({
       suppressEditorChange.current = true;
       binding = new MonacoBinding(yText, model, new Set([editor]), provider.awareness);
       bindingRef.current = binding;
+      bound.current = true;
       syncFileStateFromModel();
       releaseSuppressionSoon();
       setSyncStatus('Yjs synced');
@@ -148,6 +165,10 @@ export function useCollaborativeDocument({
       provider.off('status', handleStatus);
       provider.off('sync', handleSync);
       provider.awareness.off('change', updatePeerCount);
+      ydoc.off('beforeTransaction', markRemoteEditStart);
+      ydoc.off('afterTransaction', markRemoteEditEnd);
+      applyingRemoteEdit.current = false;
+      if (binding) bound.current = false;
       binding?.destroy();
       provider.destroy();
       ydoc.destroy();
