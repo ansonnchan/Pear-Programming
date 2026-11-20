@@ -270,7 +270,7 @@ public class EphemeralRoomStateService {
 
         RoomAccessDto access = roomAccess(code, null, null);
         if (!access.canJoin()) {
-            throw new IllegalStateException(access.reason() == null ? "Room unavailable" : access.reason());
+            throw new RoomAccessDeniedException(access.reason());
         }
 
         String sessionId = java.util.UUID.randomUUID().toString();
@@ -298,7 +298,7 @@ public class EphemeralRoomStateService {
         String normalizedColor = cursorColor == null || cursorColor.isBlank() ? nextCursorColor(code) : cursorColor;
         String deniedReason = reservePresence(code, presenceId, normalizedUserId, normalizedDisplayName, normalizedColor);
         if (deniedReason != null) {
-            throw new IllegalStateException(deniedReason);
+            throw new RoomAccessDeniedException(deniedReason);
         }
         markRoomActive(code);
         log.info("Joined room {} as {} ({})", code, normalizedDisplayName, normalizedColor);
@@ -631,7 +631,7 @@ public class EphemeralRoomStateService {
                             Long.toString(now), Long.toString(MEMBER_STALE_TTL.toMillis()),
                             Long.toString(RECENT_MEMBER_TTL.toMillis()), Integer.toString(MAX_ROOM_USERS));
                     if (!"ok".equals(result)) {
-                        return result == null ? "Room unavailable" : result;
+                        return result == null ? "unavailable" : result;
                     }
                     writeActiveCount(code, activeRedisMembers(code).size());
                     expireRoomKeys(code);

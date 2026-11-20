@@ -55,6 +55,11 @@ export function useRoomEntry({ authReady, onOpenRoom, onToast, signIn, user }: U
       onOpenRoomRef.current(joinedRoom, roomFiles, replaceUrl);
     } catch (error) {
       console.warn('Join room failed', { apiBaseUrl: API_BASE_URL, code, error });
+      if (error instanceof ApiError && error.status === 409) {
+        if (error.message.includes('room_locked')) onToastRef.current('Room is Locked. Contact the room owner if this is a mistake.');
+        else setLandingError('Room is Full.');
+        return;
+      }
       setLandingError(error instanceof ApiError && error.status === 404
         ? `Room ${code} was not found. No new room was created.`
         : `Could not join this room. The frontend tried ${API_BASE_URL}.`);
