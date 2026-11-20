@@ -1,5 +1,6 @@
 package com.pearprogram.files;
 
+import com.pearprogram.rooms.RoomRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -8,6 +9,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -16,10 +18,42 @@ import java.util.UUID;
 public class FileService {
     private final WorkspaceFileRepository files;
     private final FileSnapshotRepository snapshots;
+    private final RoomRepository rooms;
 
-    public FileService(WorkspaceFileRepository files, FileSnapshotRepository snapshots) {
+    public FileService(WorkspaceFileRepository files, FileSnapshotRepository snapshots, RoomRepository rooms) {
         this.files = files;
         this.snapshots = snapshots;
+        this.rooms = rooms;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isRoomFile(UUID fileId, String rawRoomCode) {
+        if (fileId == null || rawRoomCode == null || rawRoomCode.isBlank()) {
+            return false;
+        }
+        String roomCode = rawRoomCode.trim().replaceAll("[\\s-]+", "").toUpperCase(Locale.ROOT);
+        return rooms.findByCodeAndActiveTrue(roomCode)
+                .flatMap(room -> files.findById(fileId)
+                        .map(file -> file.getWorkspaceId().equals(room.getWorkspaceId())))
+                .orElse(false);
+    }
+
+    @Transactional(readOnly = true)
+    public SnapshotResponse getRoomSnapshot(UUID fileId, String roomCode) {
+        requireRoomFile(fileId, roomCode);
+        return getSnapshot(fileId);
+    }
+
+    @Transactional
+    public SnapshotResponse saveRoomSnapshot(UUID fileId, SnapshotRequest request) {
+        requireRoomFile(fileId, request == null ? null : request.roomCode());
+        return saveSnapshot(fileId, request);
+    }
+
+    private void requireRoomFile(UUID fileId, String roomCode) {
+        if (!isRoomFile(fileId, roomCode)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found in room");
+        }
     }
 
     @Transactional(readOnly = true)

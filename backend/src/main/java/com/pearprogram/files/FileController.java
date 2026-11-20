@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -67,12 +68,12 @@ public class FileController {
     }
 
     @GetMapping("/internal/files/{fileId}/snapshot")
-    public SnapshotResponse getSnapshot(@PathVariable UUID fileId) {
-        return fileService.getSnapshot(fileId);
+    public SnapshotResponse getSnapshot(@PathVariable UUID fileId, @RequestParam String roomCode) {
+        return fileService.getRoomSnapshot(fileId, roomCode);
     }
 
     @PostMapping("/internal/files/{fileId}/snapshot")
     public SnapshotResponse saveSnapshot(@PathVariable UUID fileId, @RequestBody SnapshotRequest request) {
-        return fileService.saveSnapshot(fileId, request);
+        return fileService.saveRoomSnapshot(fileId, request);
     }
 }

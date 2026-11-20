@@ -150,7 +150,7 @@ server.on('upgrade', async (req, socket, head) => {
     return;
   }
 
-  const authenticatedUser = await validateRealtimeAccess(parsed.roomCode, parsed.accessToken);
+  const authenticatedUser = await validateRealtimeAccess(parsed.roomCode, parsed.fileId, parsed.accessToken);
   if (!authenticatedUser) {
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
@@ -301,7 +301,7 @@ function parseDocRequest(req) {
   };
 }
 
-async function validateRealtimeAccess(roomCode, accessToken) {
+async function validateRealtimeAccess(roomCode, fileId, accessToken) {
   if (!AUTH_VALIDATION_ENDPOINT || !accessToken) {
     return null;
   }
@@ -310,6 +310,7 @@ async function validateRealtimeAccess(roomCode, accessToken) {
     const endpoint = new URL(AUTH_VALIDATION_ENDPOINT);
     endpoint.searchParams.set('token', accessToken);
     endpoint.searchParams.set('roomCode', roomCode);
+    endpoint.searchParams.set('fileId', fileId);
     const response = await fetch(endpoint, {
       headers: internalServiceHeaders(),
       signal: AbortSignal.timeout(3000)
@@ -339,7 +340,7 @@ async function hydratePostgresSnapshot(doc, roomCode, fileId) {
   }
 
   try {
-    const response = await fetch(`${SNAPSHOT_ENDPOINT}/${fileId}/snapshot`, {
+    const response = await fetch(`${SNAPSHOT_ENDPOINT}/${encodeURIComponent(fileId)}/snapshot?roomCode=${encodeURIComponent(roomCode)}`, {
       headers: internalServiceHeaders(),
       signal: AbortSignal.timeout(2500)
     });
