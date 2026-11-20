@@ -185,12 +185,6 @@ export function CreateItemModal({ error, kind, name, onCancel, onConfirm, onName
           <input
             autoFocus
             onChange={(event) => onNameChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                onConfirm();
-              }
-            }}
             placeholder={isFolder ? 'components' : 'notes.md'}
             value={name}
           />

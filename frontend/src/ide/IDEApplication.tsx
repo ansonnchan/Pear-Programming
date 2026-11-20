@@ -73,7 +73,6 @@ import type { UploadCandidate, UploadReadResult } from '../uploads';
 import { projectNameForPaths, readDroppedUploadCandidates, readUploadCandidates } from '../uploads';
 import type { AiAnnotation, ChatMessage, CursorMessage, Member, ProjectSwitchEvent, Room, RoomSessionState, WorkspaceFile } from '../types';
 
-const DEFAULT_COLOR = '#000000';
 const CONTENT_SYNC_DELAY_MS = 250;
 const BACKEND_WAKE_URL = buildWakeUrl(API_BASE_URL, '/healthz');
 const REALTIME_WAKE_URL = 'https://pear-program-realtime.onrender.com/health';
@@ -223,6 +222,7 @@ export function IDEApplication() {
   const contentSyncTimerRef = useRef<number | null>(null);
   const pendingContentSyncRef = useRef<{ fileId: string; content: string; updatedAt: string } | null>(null);
   const lastLocalEditAtRef = useRef(0);
+  const creatingItemRef = useRef(false);
   const seedingFileIdsRef = useRef<Set<string>>(new Set());
   const deletedFileIdsRef = useRef<Set<string>>(new Set());
   const folderInputRef = useRef<HTMLInputElement | null>(null);
@@ -309,19 +309,29 @@ export function IDEApplication() {
     editorRef.current = editor;
     monacoRef.current = monaco;
     setEditorMountVersion((version) => version + 1);
-    monaco.editor.defineTheme('pear-github-dark', {
-      base: 'vs-dark',
+    monaco.editor.defineTheme('pear-light', {
+      base: 'vs',
       inherit: true,
       rules: [],
       colors: {
-        'editor.background': '#1a1c18',
-        'editorGutter.background': '#1a1c18',
-        'editorLineNumber.foreground': '#77796e',
-        'editorCursor.foreground': '#58a6ff',
-        'editor.selectionBackground': '#3d5261'
+        'editor.background': '#fffefb',
+        'editorGutter.background': '#fffefb',
+        'editorLineNumber.foreground': '#b8ad98',
+        'editorLineNumber.activeForeground': '#726b5c',
+        'editor.lineHighlightBackground': '#f7f2e8',
+        'editor.lineHighlightBorder': '#00000000',
+        'editorCursor.foreground': '#45602a',
+        'editor.selectionBackground': '#dfe8c4',
+        'editor.inactiveSelectionBackground': '#ece7da',
+        'editorIndentGuide.background1': '#efe8da',
+        'editorWidget.background': '#fffcf6',
+        'editorWidget.border': '#e7ddcc',
+        'editorSuggestWidget.background': '#fffcf6',
+        'editorSuggestWidget.border': '#e7ddcc',
+        'editorSuggestWidget.selectedBackground': '#eef3dc'
       }
     });
-    monaco.editor.setTheme('pear-github-dark');
+    monaco.editor.setTheme('pear-light');
 
     editor.onDidChangeModelContent(() => {
       if (suppressEditorChangeRef.current) {
@@ -365,12 +375,12 @@ export function IDEApplication() {
       client.publish({
         destination: `/app/room/${currentRoom.code}/cursors`,
         body: JSON.stringify({
-          userId: user.id,
-          displayName: user.name,
+          userId: userRef.current.id,
+          displayName: userRef.current.name,
           fileId: currentFile.id,
           line: event.position.lineNumber,
           col: event.position.column,
-          color: DEFAULT_COLOR,
+          color: userRef.current.color,
           sentAt: now
         })
       });
@@ -722,10 +732,11 @@ export function IDEApplication() {
         <span>Ln {cursorPosition.line}, Col {cursorPosition.col}</span>
         <span className="sync-status">
           {stompConnected ? <Wifi size={13} /> : <WifiOff size={13} />}
-          {syncStatus} - {peerCount} peers
+          {syncStatus.replace(/^Yjs /, '').replace(/^\w/, (letter) => letter.toUpperCase())}
+          {peerCount > 1 && ` · ${peerCount} editing`}
         </span>
         <span>{saveStatusText(saveState, lastSavedAt)}</span>
-        <span className="encoding">UTF-8 - LF</span>
+        <span className="encoding">UTF-8 · LF</span>
       </footer>
 
       {uploadModalOpen && (
@@ -1019,7 +1030,7 @@ export function IDEApplication() {
       sessionId: user.id,
       connectionId,
       displayName: user.name,
-      color: DEFAULT_COLOR,
+      color: user.color,
       avatarUrl: user.avatarUrl,
       leadUserId: user.id,
       at: new Date().toISOString()
@@ -1040,7 +1051,7 @@ export function IDEApplication() {
       sessionId: user.id,
       connectionId,
       displayName: user.name,
-      color: DEFAULT_COLOR,
+      color: user.color,
       avatarUrl: user.avatarUrl,
       leadUserId: user.id,
       locked: nextLocked,
@@ -1060,7 +1071,7 @@ export function IDEApplication() {
       sessionId: user.id,
       connectionId,
       displayName: user.name,
-      color: DEFAULT_COLOR,
+      color: user.color,
       avatarUrl: user.avatarUrl,
       leadUserId: nextLead.id,
       targetUserId: nextLead.id,
@@ -1092,6 +1103,19 @@ export function IDEApplication() {
   }
 
   async function confirmCreateItem() {
+    // Enter and the Create button can both fire while a request is in flight; one create per dialog.
+    if (creatingItemRef.current) {
+      return;
+    }
+    creatingItemRef.current = true;
+    try {
+      await createItemFromDialog();
+    } finally {
+      creatingItemRef.current = false;
+    }
+  }
+
+  async function createItemFromDialog() {
     const currentKind = createItemKind;
     const name = createItemName.trim();
     const existingPaths = files.map((file) => file.path);

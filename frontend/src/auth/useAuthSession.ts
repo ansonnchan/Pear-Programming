@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { logoutAuthSession, restoreAuthSession, signInGuest, updateAuthProfile } from '../api';
 import type { Member } from '../types';
+import { colorForUser, NEUTRAL_USER_COLOR } from './userColor';
 
 const SESSION_REFRESH_MS = 8 * 60_000;
-const DEFAULT_USER: Member = { id: '', name: 'You', color: '#000000' };
+const DEFAULT_USER: Member = { id: '', name: 'You', color: NEUTRAL_USER_COLOR };
 
 export function useAuthSession() {
   const [user, setUser] = useState<Member>(DEFAULT_USER);
@@ -15,7 +16,7 @@ export function useAuthSession() {
     const authenticatedUser: Member = {
       id: session.userId,
       name: session.displayName,
-      color: '#000000',
+      color: colorForUser(session.userId),
       avatarUrl: session.avatarUrl ?? undefined
     };
     userRef.current = authenticatedUser;

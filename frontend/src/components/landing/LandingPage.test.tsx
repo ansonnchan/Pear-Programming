@@ -42,8 +42,14 @@ describe('LandingPage', () => {
   it('exposes compact service wake-up links', () => {
     render(<LandingPage {...baseProps} />);
 
-    expect(screen.getByRole('link', { name: baseProps.backendWakeUrl })).toHaveAttribute('href', baseProps.backendWakeUrl);
-    expect(screen.getByRole('link', { name: baseProps.realtimeWakeUrl })).toHaveAttribute('href', baseProps.realtimeWakeUrl);
+    expect(screen.getByRole('link', { name: 'Wake backend' })).toHaveAttribute('href', baseProps.backendWakeUrl);
+    expect(screen.getByRole('link', { name: 'Wake realtime' })).toHaveAttribute('href', baseProps.realtimeWakeUrl);
+  });
+
+  it('shows no decorative corner illustrations', () => {
+    const { container } = render(<LandingPage {...baseProps} />);
+
+    expect(container.querySelectorAll('img')).toHaveLength(1);
   });
 
   it('locks both room actions while an entry request is running', () => {

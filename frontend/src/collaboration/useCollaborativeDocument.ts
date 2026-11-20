@@ -144,7 +144,15 @@ export function useCollaborativeDocument({
     };
 
     provider.awareness.setLocalStateField('user', { name: user.name, color: user.color, avatarUrl: user.avatarUrl });
-    const handleStatus = ({ status }: { status: string }) => setSyncStatus(status === 'connected' ? (binding ? 'Yjs synced' : 'Yjs syncing') : 'Yjs reconnecting');
+    let everConnected = false;
+    const handleStatus = ({ status }: { status: string }) => {
+      if (status === 'connected') {
+        everConnected = true;
+        setSyncStatus(binding ? 'Yjs synced' : 'Yjs syncing');
+        return;
+      }
+      setSyncStatus(everConnected ? 'Yjs reconnecting' : 'Yjs connecting');
+    };
     const handleSync = (synced: boolean) => {
       if (synced) attachBinding();
     };

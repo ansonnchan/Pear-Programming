@@ -1,7 +1,5 @@
 import { Bot, Leaf, MessageCircle, Sparkles } from 'lucide-react';
 import pearLogoUrl from '../../../assets/favicon.png';
-import landingCozyDeskUrl from '../../../assets/landing-cozy-desk.webp';
-import landingCozyRoomUrl from '../../../assets/landing-cozy-room.webp';
 
 type LandingPageProps = {
   backendWakeUrl: string;
@@ -30,30 +28,18 @@ export function LandingPage({
 }: LandingPageProps) {
   return (
     <main className="landing-shell">
-      <div aria-hidden="true" className="landing-paper-grain" />
-      <img alt="" aria-hidden="true" className="landing-cozy-desk" src={landingCozyDeskUrl} />
-      <img alt="" aria-hidden="true" className="landing-cozy-scene" src={landingCozyRoomUrl} />
-
-      <aside aria-label="Free tier service notice" className="render-tier-banner" role="status">
-        <div className="render-tier-message">
-          <Leaf aria-hidden="true" size={13} />
-          <strong>Free tier wake-up:</strong>
-          <span>First room creation can take 1–2 minutes while the backend and real-time services start.</span>
-        </div>
-        <span className="render-tier-instruction">Please click both links below to start the instances.</span>
-        <div className="render-tier-links">
-          {backendWakeUrl && (
-            <a href={backendWakeUrl} rel="noreferrer" target="_blank">
-              {backendWakeUrl}
-            </a>
-          )}
-          {realtimeWakeUrl && (
-            <a href={realtimeWakeUrl} rel="noreferrer" target="_blank">
-              {realtimeWakeUrl}
-            </a>
-          )}
-        </div>
-      </aside>
+      {(backendWakeUrl || realtimeWakeUrl) && (
+        <aside aria-label="Free tier service notice" className="landing-notice-bar" role="status">
+          <p>
+            <Leaf aria-hidden="true" size={14} />
+            <span>Free hosting: the first room can take 1–2 minutes while the servers wake up.</span>
+          </p>
+          <span className="landing-notice-links">
+            {backendWakeUrl && <a href={backendWakeUrl} rel="noreferrer" target="_blank">Wake backend</a>}
+            {realtimeWakeUrl && <a href={realtimeWakeUrl} rel="noreferrer" target="_blank">Wake realtime</a>}
+          </span>
+        </aside>
+      )}
 
       <section className="landing-hero" id="landing-home">
         <div className="landing-copy">
