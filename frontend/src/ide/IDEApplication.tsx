@@ -1445,8 +1445,8 @@ export function IDEApplication() {
 
     if (event.type === 'sync') {
       if (event.targetUserId === user.id && Array.isArray(event.files)) {
-        const nextFiles = applyUploadedFiles(event.files, event.replaceExisting ?? true, event.openUploaded ?? false);
-        persistRoomFilesSnapshot(nextFiles);
+        // The lead's tree is already persisted; a joiner only needs to adopt it locally.
+        applyUploadedFiles(event.files, event.replaceExisting ?? true, event.openUploaded ?? false);
       }
       return;
     }
@@ -1471,8 +1471,8 @@ export function IDEApplication() {
 
     if (event.type === 'accepted') {
       if (Array.isArray(event.files) && event.proposerId !== user.id) {
-        const nextFiles = applyUploadedFiles(event.files, event.replaceExisting ?? true, event.openUploaded ?? false);
-        persistRoomFilesSnapshot(nextFiles);
+        // The proposer persisted the accepted upload before announcing it.
+        applyUploadedFiles(event.files, event.replaceExisting ?? true, event.openUploaded ?? false);
       }
       pendingUploadRef.current = null;
       committingProposalRef.current = null;

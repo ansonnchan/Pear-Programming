@@ -28,6 +28,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -102,6 +103,24 @@ class PersistenceIntegrationTests {
 
         files.deleteFile(duplicate.id());
         assertThat(files.listFiles(workspaceId)).extracting("id").containsExactly(first.id());
+    }
+
+    @Test
+    void contentUpdatesNeverRecreateDeletedFiles() {
+        UUID owner = createUser("Content Owner");
+        UUID workspaceId = workspaces.createWorkspace("Content", owner.toString()).id();
+        var kept = files.createFile(workspaceId, new CreateFileRequest("kept.py", null, "print(1)"));
+        var deleted = files.createFile(workspaceId, new CreateFileRequest("deleted.py", null, "print(2)"));
+        files.deleteFile(deleted.id());
+
+        files.updateExistingFileContents(workspaceId, List.of(
+                Map.of("id", kept.id().toString(), "path", "kept.py", "content", "print('updated')"),
+                Map.of("id", deleted.id().toString(), "path", "deleted.py", "content", "print('stale')"),
+                Map.of("path", "new.py", "content", "print('new')")
+        ));
+
+        assertThat(files.listFiles(workspaceId)).extracting("path").containsExactly("kept.py");
+        assertThat(files.getFile(kept.id()).content()).isEqualTo("print('updated')");
     }
 
     @Test

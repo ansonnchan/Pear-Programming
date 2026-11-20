@@ -172,6 +172,32 @@ public class FileService {
         return listFiles(workspaceId);
     }
 
+    /**
+     * Applies content updates only to files that already exist in the workspace. Unknown or deleted
+     * files are ignored so a stale collaborator cannot recreate them.
+     */
+    @Transactional
+    public List<FileDto> updateExistingFileContents(UUID workspaceId, List<Map<String, Object>> incoming) {
+        for (Map<String, Object> raw : incoming == null ? List.<Map<String, Object>>of() : incoming) {
+            if (raw == null || raw.get("content") == null) {
+                continue;
+            }
+            UUID requestedId = uuidValue(raw.get("id"));
+            WorkspaceFileEntity entity = requestedId == null ? null : files.findById(requestedId)
+                    .filter(file -> file.getWorkspaceId().equals(workspaceId))
+                    .orElse(null);
+            String path = stringValue(raw.get("path"));
+            if (entity == null && requestedId == null && path != null && !path.isBlank()) {
+                entity = files.findByWorkspaceIdAndPath(workspaceId, requirePath(path)).orElse(null);
+            }
+            if (entity != null) {
+                entity.updateContent(raw.get("content").toString());
+            }
+        }
+        files.flush();
+        return listFiles(workspaceId);
+    }
+
     private WorkspaceFileEntity requireEntity(UUID fileId) {
         return files.findById(fileId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));

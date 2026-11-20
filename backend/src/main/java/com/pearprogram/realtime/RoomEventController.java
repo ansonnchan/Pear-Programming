@@ -167,10 +167,10 @@ public class RoomEventController {
     public void projectSwitch(@DestinationVariable String code, ProjectSwitchEvent inbound, Principal authentication) {
         GuestPrincipal principal = principal(authentication);
         ProjectSwitchEvent event = trustedProjectSwitchEvent(inbound, principal);
+        // File-tree changes are persisted through authenticated REST calls before they are announced.
+        // STOMP only relays them, and content updates may change existing files but never create or delete them.
         if (event.files() != null && "file-content-updated".equals(event.type())) {
-            roomService.upsertRoomFiles(code, event.files());
-        } else if (event.files() != null && ("accepted".equals(event.type()) || "sync".equals(event.type()) || "files-updated".equals(event.type()))) {
-            roomService.saveRoomFiles(code, event.files());
+            roomService.updateRoomFileContents(code, event.files());
         }
         broadcastService.broadcast("/topic/room/" + code + "/project-switch", event);
     }

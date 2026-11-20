@@ -52,6 +52,37 @@ class RoomEventControllerIdentityTests {
     }
 
     @Test
+    void relaysFileTreeEventsWithoutPersistingThem() {
+        RealtimeBroadcastService broadcasts = mock(RealtimeBroadcastService.class);
+        RoomService rooms = mock(RoomService.class);
+        RoomEventController controller = new RoomEventController(
+                broadcasts,
+                rooms,
+                mock(EphemeralRoomStateService.class),
+                mock(RoomPresenceEventService.class),
+                mock(AiParticipantService.class),
+                null
+        );
+        GuestPrincipal principal = new GuestPrincipal(UUID.randomUUID(), "Member", null);
+        var authentication = UsernamePasswordAuthenticationToken.authenticated(principal, null, List.of());
+
+        controller.projectSwitch("ABC123", projectSwitch("files-updated", List.of()), authentication);
+        controller.projectSwitch("ABC123", projectSwitch("accepted", List.of()), authentication);
+        controller.projectSwitch("ABC123", projectSwitch("file-content-updated",
+                List.of(java.util.Map.of("id", "file-1", "content", "x"))), authentication);
+
+        org.mockito.Mockito.verify(rooms, org.mockito.Mockito.never()).saveRoomFiles(any(), any());
+        org.mockito.Mockito.verify(rooms).updateRoomFileContents(org.mockito.ArgumentMatchers.eq("ABC123"), any());
+        org.mockito.Mockito.verify(broadcasts, org.mockito.Mockito.times(3))
+                .broadcast(org.mockito.ArgumentMatchers.eq("/topic/room/ABC123/project-switch"), any());
+    }
+
+    private ProjectSwitchEvent projectSwitch(String type, List<java.util.Map<String, Object>> files) {
+        return new ProjectSwitchEvent(type, "proposal", null, null, null, null, null, null, null,
+                null, null, true, false, files, null);
+    }
+
+    @Test
     void broadcastsPearAiOnlyForThePearAiMention() {
         RealtimeBroadcastService broadcasts = mock(RealtimeBroadcastService.class);
         EphemeralRoomStateService roomState = mock(EphemeralRoomStateService.class);
