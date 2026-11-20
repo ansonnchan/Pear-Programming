@@ -2,8 +2,12 @@ const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const net = require('node:net');
 const path = require('node:path');
+const http = require('node:http');
 const { once } = require('node:events');
 const test = require('node:test');
+const Y = require('yjs');
+const { WebsocketProvider } = require('y-websocket');
+const WebSocket = require('ws');
 
 const SERVER_PATH = path.join(__dirname, 'server.cjs');
 
@@ -43,7 +47,83 @@ test('production readiness fails closed when required Redis is unavailable', asy
   assert.equal(code, 0, running.output());
 });
 
-async function startServer(requireRedis) {
+test('clients that connect during slow hydration still receive the stored document', async (t) => {
+  const backend = await startMockBackend({ snapshotDelayMs: 300, plainText: 'hello from postgres' });
+  t.after(() => {
+    backend.server.closeAllConnections();
+    backend.server.close();
+  });
+  const running = await startServer(false, backend.env);
+  t.after(() => stopIfRunning(running.child));
+
+  const docPath = 'ROOM01/11111111-1111-4111-8111-111111111111';
+  const first = connectClient(running.port, docPath);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const second = connectClient(running.port, docPath);
+  t.after(() => {
+    first.close();
+    second.close();
+  });
+
+  assert.equal(await first.synced, 'hello from postgres', running.output());
+  assert.equal(await second.synced, 'hello from postgres', running.output());
+  assert.equal(backend.snapshotReads(), 1);
+});
+
+function connectClient(port, docPath) {
+  const doc = new Y.Doc();
+  const provider = new WebsocketProvider(`ws://127.0.0.1:${port}`, docPath, doc, {
+    WebSocketPolyfill: WebSocket,
+    params: { access_token: 'token' }
+  });
+  const synced = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('client did not sync')), 4_000);
+    provider.on('sync', (isSynced) => {
+      if (isSynced) {
+        clearTimeout(timer);
+        resolve(doc.getText('monaco').toString());
+      }
+    });
+  });
+  const close = () => {
+    provider.destroy();
+    provider.awareness.destroy();
+    doc.destroy();
+  };
+  return { close, synced };
+}
+
+async function startMockBackend({ snapshotDelayMs, plainText }) {
+  let reads = 0;
+  const server = http.createServer((req, res) => {
+    const send = (body) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(body));
+    };
+    if (req.url.startsWith('/internal/auth/realtime/validate')) {
+      send({ valid: true, userId: 'user-1' });
+    } else if (req.method === 'GET' && req.url.includes('/snapshot')) {
+      reads += 1;
+      setTimeout(() => send({ encodedState: '', plainText }), snapshotDelayMs);
+    } else {
+      send({});
+    }
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  return {
+    server,
+    snapshotReads: () => reads,
+    env: {
+      AUTH_VALIDATION_ENDPOINT: `${origin}/internal/auth/realtime/validate`,
+      SNAPSHOT_ENDPOINT: `${origin}/internal/files`,
+      ROOM_CLEANUP_ENDPOINT: `${origin}/internal/rooms`
+    }
+  };
+}
+
+async function startServer(requireRedis, extraEnv = {}) {
   const port = await availablePort();
   let logs = '';
   const child = spawn(process.execPath, [SERVER_PATH], {
@@ -57,7 +137,8 @@ async function startServer(requireRedis) {
       REDIS_PASSWORD: '',
       REDIS_TLS: '',
       SNAPSHOT_ENDPOINT: '',
-      ROOM_CLEANUP_ENDPOINT: ''
+      ROOM_CLEANUP_ENDPOINT: '',
+      ...extraEnv
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });

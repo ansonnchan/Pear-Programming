@@ -24,6 +24,7 @@ const REDIS_BROADCAST_ORIGIN = Symbol('redis-yjs-broadcast');
 const YJS_BROADCAST_CHANNEL = `${REDIS_KEY_PREFIX}:yjs:broadcast`;
 
 const hydratedDocs = new Set();
+const pendingHydrations = new Map();
 const persistenceAttached = new Set();
 const lastFlushMs = new Map();
 const roomSockets = new Map();
@@ -166,20 +167,56 @@ server.on('upgrade', async (req, socket, head) => {
   });
 });
 
-wss.on('connection', async (ws, req) => {
+wss.on('connection', (ws, req) => {
+  // Clients send their first sync message as soon as the socket opens. Buffer anything that
+  // arrives while the document hydrates so the sync handshake is not lost.
+  const pendingMessages = [];
+  const bufferMessage = (data, isBinary) => pendingMessages.push([data, isBinary]);
+  ws.on('message', bufferMessage);
+
+  connectHydratedClient(ws, req, pendingMessages, bufferMessage).catch((error) => {
+    log('error', 'Yjs client setup failed', { room: req.pearRoomCode, fileId: req.pearFileId, error: error.message });
+    ws.off('message', bufferMessage);
+    ws.close(1011, 'Document unavailable');
+  });
+});
+
+async function connectHydratedClient(ws, req, pendingMessages, bufferMessage) {
   const { pearDocName: docName, pearRoomCode: roomCode, pearFileId: fileId } = req;
   const doc = getYDoc(docName);
+  await ensureHydrated(doc, docName, roomCode, fileId);
 
-  if (!hydratedDocs.has(docName)) {
-    hydratedDocs.add(docName);
-    await hydrateDoc(doc, roomCode, fileId);
+  ws.off('message', bufferMessage);
+  if (ws.readyState !== ws.OPEN) {
+    if (!roomSockets.has(roomCode)) {
+      scheduleRoomCleanup(roomCode);
+    }
+    return;
   }
 
   setupWSConnection(ws, req, { docName });
+  for (const [data, isBinary] of pendingMessages) {
+    ws.emit('message', data, isBinary);
+  }
   trackRoomConnection(roomCode, ws);
   attachRedisPersistence(doc, roomCode, fileId);
   log('info', 'Yjs client connected', { room: roomCode, fileId, activeDocs: docs.size });
-});
+}
+
+function ensureHydrated(doc, docName, roomCode, fileId) {
+  if (hydratedDocs.has(docName)) {
+    return Promise.resolve();
+  }
+  let hydration = pendingHydrations.get(docName);
+  if (!hydration) {
+    hydration = hydrateDoc(doc, roomCode, fileId).finally(() => {
+      hydratedDocs.add(docName);
+      pendingHydrations.delete(docName);
+    });
+    pendingHydrations.set(docName, hydration);
+  }
+  return hydration;
+}
 
 setInterval(() => {
   flushSnapshots().catch((error) => log('error', 'Snapshot flush loop failed', { error: error.message }));
