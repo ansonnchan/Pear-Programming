@@ -34,8 +34,26 @@ export function loadRoomSession(): RoomSessionState | null {
   }
 }
 
+// sessionStorage is usually limited to about 5 MB per origin, so large workspaces keep only room
+// metadata and reload file contents from the server.
+export const MAX_SESSION_FILE_CONTENT_CHARS = 1_000_000;
+
 export function persistRoomSession(state: RoomSessionState) {
-  sessionStorage.setItem(ROOM_SESSION_STORAGE_KEY, JSON.stringify(state));
+  const contentChars = state.files.reduce((total, file) => total + (file.content?.length ?? 0), 0);
+  const snapshot = contentChars > MAX_SESSION_FILE_CONTENT_CHARS ? withoutFiles(state) : state;
+  try {
+    sessionStorage.setItem(ROOM_SESSION_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    try {
+      sessionStorage.setItem(ROOM_SESSION_STORAGE_KEY, JSON.stringify(withoutFiles(state)));
+    } catch {
+      sessionStorage.removeItem(ROOM_SESSION_STORAGE_KEY);
+    }
+  }
+}
+
+function withoutFiles(state: RoomSessionState): RoomSessionState {
+  return { ...state, files: [], filesOmitted: true };
 }
 
 export function clearRoomSession() {

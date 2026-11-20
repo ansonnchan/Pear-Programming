@@ -85,7 +85,12 @@ export function useRoomEntry({ authReady, onOpenRoom, onToast, signIn, user }: U
     const joinCode = getJoinCode();
     const savedSession = loadRoomSession();
     if (user.id && savedSession?.room?.code && (!joinCode || normalizeRoomCode(joinCode) === savedSession.room.code)) {
-      onOpenRoomRef.current(savedSession.room, savedSession.files, false, savedSession);
+      // A session saved without file contents must not open an empty local tree, because the next
+      // file-tree save would replace the room's files on the server.
+      const canRestoreLocally = !savedSession.filesOmitted;
+      if (canRestoreLocally) {
+        onOpenRoomRef.current(savedSession.room, savedSession.files, false, savedSession);
+      }
       void (async () => {
         try {
           await joinRoom(savedSession.room.code);
@@ -93,7 +98,9 @@ export function useRoomEntry({ authReady, onOpenRoom, onToast, signIn, user }: U
           const roomFiles = await getRoomFiles(savedSession.room.code);
           onOpenRoomRef.current(freshRoom, roomFiles, false, savedSession);
         } catch {
-          onToastRef.current('Restored your room locally while the hosted services reconnect.');
+          onToastRef.current(canRestoreLocally
+            ? 'Restored your room locally while the hosted services reconnect.'
+            : 'Could not reload your room. Rejoin it with the room code once the services reconnect.');
         }
       })();
       return;

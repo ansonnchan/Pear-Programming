@@ -85,6 +85,24 @@ describe('useRoomEntry reconnect', () => {
     expect(onOpenRoom.mock.calls[1][1]).toEqual([]);
   });
 
+  it('waits for the server before opening a session saved without file contents', async () => {
+    const saved = JSON.parse(window.sessionStorage.getItem('pearprogram-room-session') ?? '{}') as RoomSessionState;
+    window.sessionStorage.setItem('pearprogram-room-session', JSON.stringify({ ...saved, files: [], filesOmitted: true }));
+    api.getRoomFiles.mockRejectedValue(new Error('offline'));
+    const onOpenRoom = vi.fn();
+    const onToast = vi.fn();
+    renderHook(() => useRoomEntry({
+      authReady: true,
+      onOpenRoom,
+      onToast,
+      signIn: vi.fn(),
+      user: { id: 'user-1', name: 'Pear', color: '#627d31' }
+    }));
+
+    await waitFor(() => expect(onToast).toHaveBeenCalled());
+    expect(onOpenRoom).not.toHaveBeenCalled();
+  });
+
   it('stops a new participant at the server access check when the room is locked', async () => {
     window.sessionStorage.clear();
     api.getRoomAccess.mockResolvedValue({
