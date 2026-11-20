@@ -30,27 +30,29 @@ Preserve real-time collaboration behaviour when modifying frontend components.
 
 ## UI direction
 
-Pear Programming should feel like a cozy shared coding room.
+Pear Programming should feel like a calm, minimal coding tool with a little warmth. The editor and the code come first.
 
 The visual language should use:
 
-- warm cream surfaces
-- muted pear green accents
-- dark charcoal editor surfaces
-- rounded corners
-- soft borders and shadows
-- small pear-themed illustrations
-- subtle paper-like warmth
+- light, warm cream surfaces everywhere, including the editor (light Monaco theme)
+- flat panels separated by 1px borders, without card shadows
+- muted pear green only for the Run button, active states, and the lead tag
+- the existing rounded hand-drawn font for interface text, and monospace for code
+- small icon buttons for secondary actions instead of large labelled buttons
+- one-line empty states instead of illustrations
+- the small pear logo as the only decoration
 - restrained animation
 
 The interface should remain professional and functional.
 
 Avoid:
 
-- generic SaaS styling
-- excessive gradients
-- neon colours
-- overly cartoonish elements
+- decorative illustrations, background art, and textures
+- large hero sections or marketing copy inside the app
+- heavy shadows, gradients, and glows
+- dark panels inside the light shell
+- all-caps headings and loud status pills
+- generic SaaS styling or neon colours
 - decorative elements covering functional content
 - fragile absolute positioning for main layout
 - excessive animation
