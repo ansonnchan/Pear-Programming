@@ -70,6 +70,48 @@ test('clients that connect during slow hydration still receive the stored docume
   assert.equal(backend.snapshotReads(), 1);
 });
 
+test('room cleanup keeps unsaved documents until their snapshot persists', async (t) => {
+  const backend = await startMockBackend({ snapshotDelayMs: 0, plainText: 'draft' });
+  t.after(() => {
+    backend.server.closeAllConnections();
+    backend.server.close();
+  });
+  backend.setSnapshotWritesFail(true);
+  const running = await startServer(false, {
+    ...backend.env,
+    ROOM_CLEANUP_GRACE_MS: '100',
+    ROOM_CLEANUP_RETRY_MS: '200'
+  });
+  t.after(() => stopIfRunning(running.child));
+
+  const client = connectClient(running.port, 'ROOM02/22222222-2222-4222-8222-222222222222');
+  assert.equal(await client.synced, 'draft', running.output());
+  client.close();
+
+  await waitFor(() => backend.snapshotWrites() >= 1, 'a failed snapshot write');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(await activeDocs(running.port), 1, running.output());
+
+  backend.setSnapshotWritesFail(false);
+  await waitFor(async () => (await activeDocs(running.port)) === 0, 'the persisted document to be evicted');
+});
+
+async function activeDocs(port) {
+  const response = await fetch(`http://127.0.0.1:${port}/healthz`);
+  return (await response.json()).activeDocs;
+}
+
+async function waitFor(condition, description) {
+  const deadline = Date.now() + 4_000;
+  while (Date.now() < deadline) {
+    if (await condition()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
+
 function connectClient(port, docPath) {
   const doc = new Y.Doc();
   const provider = new WebsocketProvider(`ws://127.0.0.1:${port}`, docPath, doc, {
@@ -95,6 +137,8 @@ function connectClient(port, docPath) {
 
 async function startMockBackend({ snapshotDelayMs, plainText }) {
   let reads = 0;
+  let writes = 0;
+  let failWrites = false;
   const server = http.createServer((req, res) => {
     const send = (body) => {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -102,6 +146,15 @@ async function startMockBackend({ snapshotDelayMs, plainText }) {
     };
     if (req.url.startsWith('/internal/auth/realtime/validate')) {
       send({ valid: true, userId: 'user-1' });
+    } else if (req.method === 'POST' && req.url.includes('/snapshot')) {
+      writes += 1;
+      req.resume();
+      if (failWrites) {
+        res.writeHead(503, { 'content-type': 'application/json' });
+        res.end('{}');
+      } else {
+        send({});
+      }
     } else if (req.method === 'GET' && req.url.includes('/snapshot')) {
       reads += 1;
       setTimeout(() => send({ encodedState: '', plainText }), snapshotDelayMs);
@@ -115,6 +168,8 @@ async function startMockBackend({ snapshotDelayMs, plainText }) {
   return {
     server,
     snapshotReads: () => reads,
+    snapshotWrites: () => writes,
+    setSnapshotWritesFail: (value) => { failWrites = value; },
     env: {
       AUTH_VALIDATION_ENDPOINT: `${origin}/internal/auth/realtime/validate`,
       SNAPSHOT_ENDPOINT: `${origin}/internal/files`,

@@ -16,6 +16,7 @@ const INTERNAL_SERVICE_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || '';
 const SNAPSHOT_INTERVAL_MS = numberFromEnv('SNAPSHOT_INTERVAL_MS', 30_000);
 const ROOM_TTL_SECONDS = numberFromEnv('ROOM_TTL_SECONDS', 24 * 60 * 60);
 const ROOM_CLEANUP_GRACE_MS = numberFromEnv('ROOM_CLEANUP_GRACE_MS', 120_000);
+const ROOM_CLEANUP_RETRY_MS = numberFromEnv('ROOM_CLEANUP_RETRY_MS', 30_000);
 const REQUIRE_REDIS = booleanFromEnv('REQUIRE_REDIS', false);
 const REDIS_KEY_PREFIX = normalizeRedisKeyPrefix(process.env.PEARPROGRAM_REDIS_KEY_PREFIX || process.env.REDIS_KEY_PREFIX || 'pearprogram');
 const REDIS_CONFIG = redisConfigFromEnv();
@@ -513,16 +514,18 @@ async function flushSnapshots() {
 
 async function flushRoomSnapshots(roomCode) {
   const prefix = `${roomCode}:`;
-  for (const [docName, doc] of docs.entries()) {
+  const results = new Map();
+  for (const [docName, doc] of [...docs.entries()]) {
     if (docName.startsWith(prefix)) {
-      await flushSnapshot(docName, doc);
+      results.set(docName, await flushSnapshot(docName, doc));
     }
   }
+  return results;
 }
 
 async function flushSnapshot(docName, doc) {
   if (!SNAPSHOT_ENDPOINT) {
-    return;
+    return true;
   }
 
   const [roomCode, fileId] = docName.split(':');
@@ -544,9 +547,12 @@ async function flushSnapshot(docName, doc) {
 
     if (!response.ok) {
       log('warn', 'Snapshot flush returned non-OK status', { room: roomCode, fileId, status: response.status });
+      return false;
     }
+    return true;
   } catch (error) {
     log('warn', 'Snapshot flush failed', { room: roomCode, fileId, error: error.message });
+    return false;
   }
 }
 
@@ -608,52 +614,62 @@ async function cleanupInactiveRoom(roomCode) {
     return;
   }
 
-  await flushRoomSnapshots(roomCode);
-  const removedDocs = cleanupInMemoryRoomDocs(roomCode);
-  const removedRedisKeys = await cleanupRedisRoomDocs(roomCode);
+  const flushResults = await flushRoomSnapshots(roomCode);
+  if (roomSockets.has(roomCode)) {
+    log('info', 'Skipped Yjs room cleanup because users reconnected during the snapshot flush', { room: roomCode });
+    return;
+  }
+
+  // Only evict documents whose final state reached PostgreSQL. Their Redis update logs are the
+  // only other copy of unsaved edits, so failed documents keep both until a retry succeeds.
+  const persistedDocs = [...flushResults].filter(([, persisted]) => persisted).map(([docName]) => docName);
+  const failedDocs = [...flushResults].filter(([, persisted]) => !persisted).map(([docName]) => docName);
+  const removedDocs = cleanupInMemoryRoomDocs(persistedDocs);
+  const removedRedisKeys = await cleanupRedisRoomDocs(persistedDocs);
+
+  if (failedDocs.length > 0) {
+    log('warn', 'Kept unsaved Yjs documents until their snapshots persist', { room: roomCode, failedDocs: failedDocs.length });
+    scheduleCleanupRetry(roomCode, ROOM_CLEANUP_RETRY_MS, 'snapshot flush failed');
+    return;
+  }
+
   const backendResult = await notifyBackendRoomCleanup(roomCode);
   if (backendResult?.reason === 'pending' && !roomSockets.has(roomCode)) {
-    scheduleBackendCleanupRetry(roomCode);
+    scheduleCleanupRetry(roomCode, 5_000, 'backend cleanup pending');
   }
   log('info', 'Cleaned up inactive Yjs room state', { room: roomCode, removedDocs, removedRedisKeys });
 }
 
-function scheduleBackendCleanupRetry(roomCode) {
+function scheduleCleanupRetry(roomCode, retryMs, reason) {
   cancelRoomCleanup(roomCode);
   const timer = setTimeout(() => {
     roomCleanupTimers.delete(roomCode);
     if (!roomSockets.has(roomCode)) {
       cleanupInactiveRoom(roomCode).catch((error) => log('warn', 'Room cleanup retry failed', { room: roomCode, error: error.message }));
     }
-  }, 5_000);
+  }, retryMs);
   timer.unref?.();
   roomCleanupTimers.set(roomCode, timer);
-  log('info', 'Scheduled backend room cleanup retry', { room: roomCode, retryMs: 5_000 });
+  log('info', 'Scheduled room cleanup retry', { room: roomCode, retryMs, reason });
 }
 
-async function cleanupRedisRoomDocs(roomCode) {
-  if (!redisAvailable || !redis) {
+async function cleanupRedisRoomDocs(docNames) {
+  if (!redisAvailable || !redis || docNames.length === 0) {
     return 0;
   }
-  let cursor = '0';
-  let removed = 0;
-  const pattern = `${REDIS_KEY_PREFIX}:yjs:${roomCode}:*:updates`;
-  do {
-    const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
-    cursor = nextCursor;
-    if (keys.length > 0) {
-      removed += await redis.del(...keys);
-    }
-  } while (cursor !== '0');
-  return removed;
+  const keys = docNames.map((docName) => {
+    const [roomCode, fileId] = docName.split(':');
+    return redisKey(roomCode, fileId);
+  });
+  return redis.del(...keys);
 }
 
-function cleanupInMemoryRoomDocs(roomCode) {
-  const prefix = `${roomCode}:`;
+function cleanupInMemoryRoomDocs(docNames) {
   let removed = 0;
 
-  for (const [docName, doc] of docs.entries()) {
-    if (!docName.startsWith(prefix)) {
+  for (const docName of docNames) {
+    const doc = docs.get(docName);
+    if (!doc) {
       continue;
     }
 
