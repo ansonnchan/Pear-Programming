@@ -1,6 +1,8 @@
 # Execution performance
 
-Pear Programming records execution latency without treating Judge0's program runtime as end-to-end latency.
+Pear Programming records execution latency without treating the provider's program runtime as end-to-end latency.
+
+Wandbox, the default provider, runs code synchronously and does not report program runtime. With Wandbox, orchestration overhead is therefore not recorded, and Judge0 polling settings do not apply. The metrics below describe the Judge0 provider unless noted.
 
 ## Metrics
 
