@@ -10,13 +10,17 @@ import java.util.List;
 @RequestMapping("/api/execution/languages")
 public class ExecutionLanguageController {
     private final ExecutionLanguageRegistry languages;
+    private final ExecutionProvider provider;
 
-    public ExecutionLanguageController(ExecutionLanguageRegistry languages) {
+    public ExecutionLanguageController(ExecutionLanguageRegistry languages, ExecutionProvider provider) {
         this.languages = languages;
+        this.provider = provider;
     }
 
     @GetMapping
     public List<ExecutionLanguageOption> list() {
-        return languages.options();
+        return languages.options().stream()
+                .filter(option -> provider.supportsLanguage(option.id()))
+                .toList();
     }
 }

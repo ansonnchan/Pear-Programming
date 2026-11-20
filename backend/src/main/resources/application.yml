@@ -71,6 +71,13 @@ pearprogram:
     realtime-token-ttl: ${AUTH_REALTIME_TOKEN_TTL:10m}
     internal-service-token: ${INTERNAL_SERVICE_TOKEN:}
   execution:
+    # wandbox (free public service, default) or judge0 (self-hosted or RapidAPI)
+    provider: ${EXECUTION_PROVIDER:wandbox}
+    wandbox:
+      base-url: ${WANDBOX_BASE_URL:https://wandbox.org}
+      request-timeout: ${WANDBOX_REQUEST_TIMEOUT:12s}
+      max-retries: ${WANDBOX_MAX_RETRIES:2}
+      retry-backoff: ${WANDBOX_RETRY_BACKOFF:1s}
     max-source-bytes: ${EXECUTION_MAX_SOURCE_BYTES:100000}
     max-stdin-bytes: ${EXECUTION_MAX_STDIN_BYTES:20000}
     rate-limit-per-minute: ${EXECUTION_RATE_LIMIT_PER_MINUTE:10}

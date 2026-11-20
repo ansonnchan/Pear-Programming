@@ -9,7 +9,7 @@ Pear Programming is a real-time collaborative browser IDE for pair programming. 
 - Real-time Monaco editing powered by Yjs
 - Shared workspaces, file uploads, folders, tabs, and collaborative deletion
 - Room presence, chat, lead controls, locking, and reconnect-safe cleanup
-- Sandboxed Judge0 execution and optional context-aware PearAI assistance
+- Sandboxed code execution through a pluggable provider (free Wandbox by default, or Judge0), plus optional context-aware PearAI assistance
 - Durable workspaces and files stored in PostgreSQL
 
 ## Preview
@@ -26,7 +26,7 @@ Pear Programming is a real-time collaborative browser IDE for pair programming. 
 React + Monaco
   ├─ REST and STOMP ──> Spring Boot ──> PostgreSQL
   │                         ├─────────> Redis
-  │                         ├─────────> Judge0
+  │                         ├─────────> Wandbox or Judge0
   │                         └─────────> AI provider
   └─ Yjs WebSocket ──> Realtime service ──> Redis
 ```
@@ -100,19 +100,28 @@ The complete reference is [.env.example](.env.example). Production values are do
 | Frontend | `VITE_API_URL`, `VITE_STOMP_URL`, `VITE_YJS_URL` |
 | Backend database | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` |
 | Backend Redis | `SPRING_REDIS_HOST`, `SPRING_REDIS_PORT`, or `SPRING_REDIS_URL` |
-| Execution | `JUDGE0_BASE_URL`; hosted providers may also require `JUDGE0_API_KEY` and `JUDGE0_API_HOST` |
+| Execution | `EXECUTION_PROVIDER` (`wandbox` by default, needs no key; or `judge0` with `JUDGE0_BASE_URL`, plus `JUDGE0_API_KEY` and `JUDGE0_API_HOST` for RapidAPI) |
 | PearAI | `GROQ_API_KEY` |
 | Realtime Redis | `REDIS_URL`, or `REDIS_HOST` and `REDIS_PORT` |
 | Realtime API | `AUTH_VALIDATION_ENDPOINT`, `SNAPSHOT_ENDPOINT`, `ROOM_CLEANUP_ENDPOINT` |
 | Internal security | `INTERNAL_SERVICE_TOKEN`, shared by backend and realtime in deployed environments |
 
-Judge0 and PearAI are optional for local editing and collaboration. Their related features show a configuration or availability message when not configured.
+Code execution works out of the box through the free public Wandbox service. PearAI is optional for local editing and collaboration. Their related features show a configuration or availability message when not configured.
 
 ## Supported Execution Languages
 
-Java, Python, JavaScript, C, C++, TypeScript, SQL, C#, PHP, Ruby, Go, Rust, Kotlin, Swift, R, and Bash.
+| Provider | Languages |
+| --- | --- |
+| Wandbox (default) | Java, Python, JavaScript, C, C++, TypeScript, SQL, C#, PHP, Ruby, Go, Rust, R, and Bash |
+| Judge0 | All of the above, plus Kotlin and Swift |
 
-Judge0 language IDs vary between deployments. Compare the backend registry with the configured provider's `/languages` response.
+Wandbox has no Kotlin compiler, and its Swift compilers currently fail to start, so the language picker hides both when Wandbox is active. Wandbox is a free community service with rate limits and no uptime guarantee. To re-check every language against it:
+
+```bash
+cd backend && WANDBOX_LIVE=true mvn -Dtest=WandboxLiveCheckTests test
+```
+
+Judge0 language IDs vary between deployments. When using Judge0, compare the backend registry with the provider's `/languages` response.
 
 ## Testing
 
@@ -122,7 +131,7 @@ Judge0 language IDs vary between deployments. Compare the backend registry with 
 (cd realtime && npm run lint && npm test)
 ```
 
-Frontend and backend tests use mocked execution providers, so Judge0 is not required.
+Frontend and backend tests use mocked execution providers, so no execution service is required.
 
 With Redis running locally, set `PEARPROGRAM_TEST_REDIS_HOST=localhost` before `mvn test` to also run the Redis room-admission test. CI runs all three suites on every pull request and push to `main`.
 

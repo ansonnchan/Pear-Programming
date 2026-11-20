@@ -21,7 +21,9 @@ public class ExecutionProperties {
     private Duration workerLease = Duration.ofSeconds(30);
     private int workerMaxRetries = 3;
     private Duration workerRetryBackoff = Duration.ofSeconds(1);
+    private String provider = "wandbox";
     private final Judge0 judge0 = new Judge0();
+    private final Wandbox wandbox = new Wandbox();
 
     public int getMaxSourceBytes() { return maxSourceBytes; }
     public void setMaxSourceBytes(int value) { this.maxSourceBytes = value; }
@@ -49,7 +51,33 @@ public class ExecutionProperties {
     public void setWorkerMaxRetries(int value) { this.workerMaxRetries = value; }
     public Duration getWorkerRetryBackoff() { return workerRetryBackoff; }
     public void setWorkerRetryBackoff(Duration value) { this.workerRetryBackoff = value; }
+    public String getProvider() { return provider; }
+    public void setProvider(String value) { this.provider = value; }
     public Judge0 getJudge0() { return judge0; }
+    public Wandbox getWandbox() { return wandbox; }
+
+    public static class Wandbox {
+        private String baseUrl = "https://wandbox.org";
+        private Duration connectTimeout = Duration.ofSeconds(5);
+        // Wandbox has no per-request time limit, so the HTTP read timeout is the execution limit.
+        private Duration requestTimeout = Duration.ofSeconds(12);
+        private int maxRetries = 2;
+        private Duration retryBackoff = Duration.ofSeconds(1);
+        private Duration compilerCacheTtl = Duration.ofHours(6);
+
+        public String getBaseUrl() { return baseUrl; }
+        public void setBaseUrl(String value) { this.baseUrl = value; }
+        public Duration getConnectTimeout() { return connectTimeout; }
+        public void setConnectTimeout(Duration value) { this.connectTimeout = value; }
+        public Duration getRequestTimeout() { return requestTimeout; }
+        public void setRequestTimeout(Duration value) { this.requestTimeout = value; }
+        public int getMaxRetries() { return maxRetries; }
+        public void setMaxRetries(int value) { this.maxRetries = value; }
+        public Duration getRetryBackoff() { return retryBackoff; }
+        public void setRetryBackoff(Duration value) { this.retryBackoff = value; }
+        public Duration getCompilerCacheTtl() { return compilerCacheTtl; }
+        public void setCompilerCacheTtl(Duration value) { this.compilerCacheTtl = value; }
+    }
 
     public static class Judge0 {
         private String baseUrl = "http://localhost:2358";

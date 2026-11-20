@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 @Component
+@ConditionalOnProperty(prefix = "pearprogram.execution", name = "provider", havingValue = "judge0")
 public class Judge0ExecutionProvider implements ExecutionProvider {
     private static final Logger log = LoggerFactory.getLogger(Judge0ExecutionProvider.class);
 

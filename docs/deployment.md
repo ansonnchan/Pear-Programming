@@ -12,21 +12,21 @@ Internet
      -> everything else    Nginx-hosted React frontend
 
 Spring Boot -> PostgreSQL
-Spring Boot -> Redis -> execution workers -> Judge0
+Spring Boot -> Redis -> execution workers -> Wandbox (default) or Judge0
 Node Yjs    -> Redis
 Node Yjs    -> Spring internal snapshot/authentication APIs -> PostgreSQL
 ```
 
 Only Caddy publishes host ports. PostgreSQL, Redis, Spring, Node, and Nginx stay on the private Compose network. Using one public origin avoids third-party-cookie restrictions and lets the secure `JSESSIONID` and CSRF cookie work consistently across REST and SockJS/STOMP. Caddy strips `/yjs` before proxying the Yjs WebSocket path expected by the Node service.
 
-Judge0 is intentionally not bundled. A reliable self-hosted Judge0 installation includes its own database, queue, and workers; operate it separately or use a hosted Judge0-compatible provider.
+Code execution defaults to the free public Wandbox service (`EXECUTION_PROVIDER=wandbox`), which needs no key but has rate limits and no uptime guarantee. Judge0 (`EXECUTION_PROVIDER=judge0`) is intentionally not bundled. A reliable self-hosted Judge0 installation includes its own database, queue, and workers; operate it separately or use a hosted Judge0-compatible provider.
 
 ## Prerequisites
 
 - A Linux host with current Docker Engine and Docker Compose v2.
 - A DNS `A`/`AAAA` record for `PUBLIC_APP_HOST` pointing to the host.
 - Public inbound TCP ports 80 and 443, plus UDP 443 if HTTP/3 is desired.
-- A Judge0-compatible endpoint reachable from the backend container.
+- Outbound HTTPS from the backend container to `wandbox.org`, or a Judge0-compatible endpoint if `EXECUTION_PROVIDER=judge0`.
 - Enough persistent disk for PostgreSQL, Redis AOF, and Caddy certificate state.
 
 ## Configure secrets
@@ -47,7 +47,7 @@ PUBLIC_APP_HOST=pear.example.com
 PUBLIC_APP_ORIGIN=https://pear.example.com
 ```
 
-For self-hosted Judge0, `JUDGE0_API_KEY` and `JUDGE0_API_HOST` can remain empty. Hosted RapidAPI-compatible providers generally require both. Never use a private backend/Judge0 hostname in frontend variables.
+With the default Wandbox provider, all `JUDGE0_*` values can stay empty. For self-hosted Judge0, `JUDGE0_API_KEY` and `JUDGE0_API_HOST` can remain empty. Hosted RapidAPI-compatible providers generally require both. Never use a private backend/Judge0 hostname in frontend variables.
 
 ## Validate and start
 
@@ -129,8 +129,8 @@ Caddy's `caddy-data` volume contains certificate state. Losing it does not lose 
 
 ## Failure recovery
 
-- **Judge0 unavailable:** collaboration remains available. Execution workers use bounded retries and deadlines; restore provider connectivity and rerun code.
-- **Judge0 language mismatch:** compare the configured provider's `GET /languages` response with `ExecutionLanguageRegistry`. The frontend reads Pear Programming's authenticated `/api/execution/languages` catalog, but provider-specific numeric IDs still need to match the deployed Judge0 instance.
+- **Execution provider unavailable or rate limited (Wandbox returns HTTP 429):** collaboration remains available. Execution workers use bounded retries and deadlines; restore provider connectivity and rerun code.
+- **Language mismatch:** with Wandbox, run `WandboxLiveCheckTests` to confirm each compiler still works. With Judge0, compare the provider's `GET /languages` response with `ExecutionLanguageRegistry`. The frontend reads Pear Programming's authenticated `/api/execution/languages` catalog, but provider-specific numeric IDs still need to match the deployed Judge0 instance.
 - **Redis unavailable:** realtime `/readyz` becomes unhealthy and new execution submission fails closed. Restore Redis before restarting dependent services.
 - **PostgreSQL unavailable:** Spring cannot start safely. Restore the database and verify Flyway history before bringing the stack up.
 - **Realtime restart:** SIGTERM stops readiness, closes clients with a restart code, attempts a final PostgreSQL snapshot flush, and closes Redis connections. Browsers reconnect through Yjs.
@@ -141,7 +141,7 @@ Caddy's `caddy-data` volume contains certificate state. Losing it does not lose 
 
 This Compose topology intentionally runs one backend and one realtime instance. Redis already coordinates room fanout, Yjs updates, execution jobs, and leases, but HTTP sessions and realtime access tokens remain process-local. Do not add backend replicas without either shared/signed session state or sticky routing. Do not add realtime replicas without verifying Redis pub/sub behavior and load-balancer WebSocket routing under failure.
 
-Execution concurrency is bounded by `EXECUTION_WORKER_THREADS` per backend instance and by the Judge0 deployment. Increasing it without provider capacity creates backpressure rather than throughput.
+Execution concurrency is bounded by `EXECUTION_WORKER_THREADS` per backend instance and by the execution provider's capacity or rate limits. Increasing it without provider capacity creates backpressure rather than throughput.
 
 For a managed deployment, map the same service boundaries to the platform's PostgreSQL, Redis TCP, container, TLS, and persistent-volume products. Preserve the same-origin routing and private internal endpoints.
 
@@ -150,6 +150,6 @@ For a managed deployment, map the same service boundaries to the platform's Post
 - Containers and dependencies still require regular patching and image rebuilds. Tags should be pinned to reviewed digests in a stricter production environment.
 - The Compose host is a single point of failure; it is appropriate for a demo, not a high-availability service.
 - Database backups, restore drills, host monitoring, alerting, and secret management remain operator responsibilities.
-- Judge0 is the sandbox boundary and must be independently isolated, patched, resource-limited, and prevented from reaching sensitive internal networks.
+- The execution provider is the sandbox boundary. Wandbox runs code on its own infrastructure; a self-hosted Judge0 must be independently isolated, patched, resource-limited, and prevented from reaching sensitive internal networks.
 - Guest authentication has no email verification, account recovery, invitation workflow, or abuse prevention beyond the existing limits.
 - This phase does not claim a deployed URL or a verified multi-user demonstration.

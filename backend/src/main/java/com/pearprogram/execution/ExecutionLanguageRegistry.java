@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
@@ -56,6 +57,13 @@ public class ExecutionLanguageRegistry {
     public OptionalInt judge0Id(String language) {
         LanguageDefinition definition = LANGUAGES_BY_ID.get(normalize(language));
         return definition == null ? OptionalInt.empty() : OptionalInt.of(definition.judge0Id());
+    }
+
+    public Optional<String> languageForJudge0Id(int judge0Id) {
+        return LANGUAGES.stream()
+                .filter(language -> language.judge0Id() == judge0Id)
+                .map(LanguageDefinition::id)
+                .findFirst();
     }
 
     public Set<String> supportedLanguages() {
