@@ -2,9 +2,11 @@
 
 [![CI](https://github.com/ansonnchan/Pear-Programming/actions/workflows/ci.yml/badge.svg)](https://github.com/ansonnchan/Pear-Programming/actions/workflows/ci.yml)
 
-A real-time collaborative code editor in the browser. Share a room code, and up to five people can write, run, and talk about code together.
+A real-time collaborative code editor in the browser. Share a room code, and up to five people can write, run, and talk about code together. 
 
-**[Try it live](https://pear-programming.vercel.app)** (free hosting, so the first visit can take a minute to wake up)
+**And yes, the name is intentional—it’s a pun. I’m not even that into pears.**
+
+**[Try it live here](https://pear-programming.vercel.app)** (free hosting, so the first visit can take a minute to wake up)
 
 <p align="center">
   <img src="assets/pear-program-demo.gif" alt="Two people editing, running, and chatting in a Pear Programming room" width="800">
@@ -12,7 +14,7 @@ A real-time collaborative code editor in the browser. Share a room code, and up 
 
 ## Why I built this
 
-Pairing over a screen share always felt one-sided: one person types while the other watches. I wanted a space where everyone has their own cursor in the same file, and I wanted to learn how tools like Google Docs and VS Code Live Share keep several people's edits in sync without conflicts.
+Pairing over a screen share always felt one-sided: one person types while the other watches. I wanted a space where everyone has their own cursor in the same file, and I wanted to learn how tools like Google Docs keep several people's edits in sync without conflicts.
 
 ## What it does
 
