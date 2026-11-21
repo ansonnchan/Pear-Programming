@@ -1,4 +1,9 @@
 spring:
+  autoconfigure:
+    # Most tests use MockMvc container sessions; SessionPersistenceTests turns Spring Session back on.
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+      - org.springframework.boot.autoconfigure.session.SessionAutoConfiguration
   datasource:
     url: jdbc:h2:mem:pearprogram-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
     username: sa
