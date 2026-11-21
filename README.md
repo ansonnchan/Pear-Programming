@@ -2,53 +2,47 @@
 
 [![CI](https://github.com/ansonnchan/Pear-Programming/actions/workflows/ci.yml/badge.svg)](https://github.com/ansonnchan/Pear-Programming/actions/workflows/ci.yml)
 
-Pear Programming is a real-time collaborative browser IDE for pair programming. Users can create or join a room, edit shared files, chat, work with PearAI, and run code in a sandboxed environment.
+A real-time collaborative code editor in the browser. Share a room code, and up to five people can write, run, and talk about code together. 
 
-## Highlights
+**And yes, the name is intentional—it’s a pun. I’m not even that into pears.**
 
-- Real-time Monaco editing powered by Yjs
-- Shared workspaces, file uploads, folders, tabs, and collaborative deletion
-- Room presence, chat, lead controls, locking, and reconnect-safe cleanup
-- Sandboxed code execution through a pluggable provider (free Wandbox by default, or Judge0), plus optional context-aware PearAI assistance
-- Durable workspaces and files stored in PostgreSQL
-
-## Preview
+**[Try it live here](https://pear-programming.vercel.app)** (free hosting, so the first visit can take a minute to wake up)
 
 <p align="center">
-  <img src="assets/pear-program-demo.gif" alt="Pear Programming collaborative IDE live demo" width="800">
-  <br>
-  Demo above. Don't mind the poor quality (it's the best I can do 😔)
+  <img src="assets/pear-program-demo.gif" alt="Two people editing, running, and chatting in a Pear Programming room" width="800">
 </p>
 
-## Architecture
+## Why I built this
+
+Pairing over a screen share always felt one-sided: one person types while the other watches. I wanted a space where everyone has their own cursor in the same file, and I wanted to learn how tools like Google Docs keep several people's edits in sync without conflicts.
+
+## What it does
+
+- **Shared editing**: everyone edits the same files live, with conflicts merged automatically (Yjs CRDTs)
+- **Rooms**: create one, share the six-letter code, and see who's online
+- **Chat**: talk next to the code, and mention `@PearAI` for an assistant that can see the file
+- **Run code**: run 14 languages in a sandbox and see the output together
+- **Workspaces**: upload a project, organize folders and tabs, and download it again
+
+## How it works
 
 ```text
 React + Monaco
   ├─ REST and STOMP ──> Spring Boot ──> PostgreSQL
   │                         ├─────────> Redis
-  │                         ├─────────> Wandbox or Judge0
+  │                         ├─────────> Code runner (Wandbox)
   │                         └─────────> AI provider
   └─ Yjs WebSocket ──> Realtime service ──> Redis
 ```
 
-- `frontend/` — React, TypeScript, Vite, Monaco, and the IDE interface
-- `backend/` — Spring Boot API, authentication, rooms, chat, presence, files, and execution
-- `realtime/` — Node Yjs synchronization and snapshot service
-- `docs/` — deployment and reliability documentation
+- **Frontend**: React, TypeScript, Vite, and Monaco
+- **Backend**: Spring Boot for sign-in, rooms, chat, presence, files, and code execution
+- **Realtime service**: Node and Yjs to sync edits and save snapshots
+- **Storage**: PostgreSQL holds workspaces, files, and sessions; Redis holds presence, live update fan-out, and the execution queue
 
-PostgreSQL is the durable source of truth. Redis coordinates ephemeral presence, realtime fanout, Yjs updates, and execution jobs.
+## Run locally
 
-## Requirements
-
-- Java 21+
-- Maven 3.9+
-- Node.js 20+
-- npm 10+
-- Docker Desktop
-
-## Run Locally
-
-Start PostgreSQL and Redis:
+Needs Java 21, Maven, Node 20, and Docker.
 
 ```bash
 docker compose up -d postgres redis
@@ -62,82 +56,33 @@ VITE_STOMP_URL=http://localhost:8081/ws
 VITE_YJS_URL=ws://localhost:1235
 ```
 
-For Redis-backed realtime synchronization, create `realtime/.env`:
+Create `realtime/.env`:
 
 ```env
 REDIS_HOST=localhost
 SNAPSHOT_ENDPOINT=http://localhost:8081/internal/files
-ROOM_CLEANUP_ENDPOINT=http://localhost:8081/internal/rooms
 ```
 
-Run each service in a separate terminal:
+Then start each service in its own terminal:
 
 ```bash
-cd backend
-mvn spring-boot:run
+cd backend && mvn spring-boot:run
 ```
 
 ```bash
-cd realtime
-npm install
-npm run dev
+cd realtime && npm install && npm run dev
 ```
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cd frontend && npm install && npm run dev
 ```
 
-Open `http://localhost:5174`.
+Open http://localhost:5174.
 
-## Environment Variables
+## What I'd improve next
 
-The complete reference is [.env.example](.env.example). Production values are documented in [.env.production.example](.env.production.example).
-
-| Service | Essential variables |
-| --- | --- |
-| Frontend | `VITE_API_URL`, `VITE_STOMP_URL`, `VITE_YJS_URL` |
-| Backend database | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` |
-| Backend Redis | `SPRING_REDIS_HOST`, `SPRING_REDIS_PORT`, or `SPRING_REDIS_URL` |
-| Execution | `EXECUTION_PROVIDER` (`wandbox` by default, needs no key; or `judge0` with `JUDGE0_BASE_URL`, plus `JUDGE0_API_KEY` and `JUDGE0_API_HOST` for RapidAPI) |
-| PearAI | `GROQ_API_KEY` |
-| Realtime Redis | `REDIS_URL`, or `REDIS_HOST` and `REDIS_PORT` |
-| Realtime API | `AUTH_VALIDATION_ENDPOINT`, `SNAPSHOT_ENDPOINT`, `ROOM_CLEANUP_ENDPOINT` |
-| Internal security | `INTERNAL_SERVICE_TOKEN`, shared by backend and realtime in deployed environments |
-
-Code execution works out of the box through the free public Wandbox service. PearAI is optional for local editing and collaboration. Their related features show a configuration or availability message when not configured.
-
-## Supported Execution Languages
-
-| Provider | Languages |
-| --- | --- |
-| Wandbox (default) | Java, Python, JavaScript, C, C++, TypeScript, SQL, C#, PHP, Ruby, Go, Rust, R, and Bash |
-| Judge0 | All of the above, plus Kotlin and Swift |
-
-Wandbox has no Kotlin compiler, and its Swift compilers currently fail to start, so the language picker hides both when Wandbox is active. Wandbox is a free community service with rate limits and no uptime guarantee. To re-check every language against it:
-
-```bash
-cd backend && WANDBOX_LIVE=true mvn -Dtest=WandboxLiveCheckTests test
-```
-
-Judge0 language IDs vary between deployments. When using Judge0, compare the backend registry with the provider's `/languages` response.
-
-## Testing
-
-```bash
-(cd frontend && npm run lint && npm test && npm run build)
-(cd backend && mvn test)
-(cd realtime && npm run lint && npm test)
-```
-
-Frontend and backend tests use mocked execution providers, so no execution service is required.
-
-With Redis running locally, set `PEARPROGRAM_TEST_REDIS_HOST=localhost` before `mvn test` to also run the Redis room-admission test. CI runs all three suites on every pull request and push to `main`.
-
-Execution latency definitions and repeatable benchmark commands are documented in
-[docs/execution-performance.md](docs/execution-performance.md).
-
-## Deployment
-
-See [docs/deployment.md](docs/deployment.md) for the production Compose topology, HTTPS/WebSocket routing, secrets, migrations, backups, and recovery.
+- **Real accounts**: guests are anonymous today, so a room's lead role can't follow you to another device
+- **My own code runner**: the free public runner has rate limits and no Kotlin or Swift support
+- **Always-on hosting**: the free tier sleeps, so the first visit waits for the servers to wake up
+- **Follow mode**: jump to wherever a teammate is editing
+- **Better mobile layout**: the editor is built for laptop and desktop screens
