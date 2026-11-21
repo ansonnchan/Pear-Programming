@@ -22,6 +22,11 @@ spring:
   flyway:
     enabled: true
     validate-migration-naming: true
+  session:
+    jdbc:
+      # Tables come from the Flyway migration V3__create_http_sessions.sql.
+      initialize-schema: never
+      cleanup-cron: "0 */5 * * * *"
   lifecycle:
     timeout-per-shutdown-phase: ${SPRING_SHUTDOWN_TIMEOUT:20s}
   data:

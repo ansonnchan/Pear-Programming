@@ -85,6 +85,8 @@ public class EphemeralRoomStateService {
     private final boolean redisSslEnabled;
     private final Map<String, LocalRoomState> localRooms = new ConcurrentHashMap<>();
     private volatile boolean redisAvailable = false;
+    /** False until the first Redis check, so early requests check Redis instead of silently using memory. */
+    private volatile boolean redisChecked = false;
     private volatile boolean redisFailureLogged = false;
 
     public EphemeralRoomStateService(
@@ -137,6 +139,7 @@ public class EphemeralRoomStateService {
                         rootCauseMessage(ex), endpoint.hostPresent(), endpoint.portPresent(), endpoint.sslEnabled(), keyPrefix);
             }
         }
+        redisChecked = true;
     }
 
     public boolean reserveRoomCode(String code) {
@@ -1047,6 +1050,11 @@ public class EphemeralRoomStateService {
     }
 
     private <T> T executeWithFallback(Supplier<T> redisAction, Supplier<T> localAction) {
+        if (!redisChecked) {
+            // Right after startup, check Redis now. Otherwise joins made before the scheduled check land in
+            // memory and disappear once Redis is detected, which rejects those users' chat messages.
+            refreshRedisAvailability();
+        }
         if (redisAvailable) {
             try {
                 return redisAction.get();
