@@ -5,6 +5,12 @@ import { getStompConnectHeaders, STOMP_URL } from '../api';
 
 type RoomConnectionHandlers = {
   onAnnotation: (message: IMessage) => void;
+  /**
+   * Runs before every connect and reconnect attempt. The server only accepts room messages from active
+   * members, so this re-registers the user (and recovers an expired sign-in) before the socket opens.
+   * Resolve to false to stop reconnecting, for example when the room is gone, full, or locked.
+   */
+  onBeforeConnect: () => Promise<boolean>;
   onChat: (message: IMessage) => void;
   onConnected: (client: Client) => void;
   onCursor: (message: IMessage) => void;
@@ -33,6 +39,15 @@ export function useRoomConnection(roomCode: string | null, handlers: RoomConnect
     const connection = new Client({
       connectHeaders: getStompConnectHeaders(),
       reconnectDelay: 2000,
+      beforeConnect: async () => {
+        const shouldConnect = await handlersRef.current.onBeforeConnect().catch(() => true);
+        // The CSRF token can change after a session is recovered, so read it for every attempt.
+        connection.connectHeaders = getStompConnectHeaders();
+        if (!shouldConnect) {
+          console.info('Room realtime reconnect stopped', { roomCode });
+          await connection.deactivate();
+        }
+      },
       webSocketFactory: () => new SockJS(STOMP_URL),
       onConnect: () => {
         connectionCountRef.current += 1;

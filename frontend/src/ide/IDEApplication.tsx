@@ -11,8 +11,10 @@ import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import {
   API_BASE_URL,
+  ApiError,
   createFile,
   dismissAnnotation,
+  joinRoom,
   listAnnotations,
   saveRoomFiles,
   updateFileContent,
@@ -477,6 +479,7 @@ export function IDEApplication() {
       setAnnotations((current) => upsertAnnotation(current, annotation).slice(-5));
     },
     onProjectSwitch: (message) => handleProjectSwitchEvent(JSON.parse(message.body) as ProjectSwitchEvent),
+    onBeforeConnect: prepareRoomConnection,
     onConnected: handleConnected,
     onHeartbeat: handleHeartbeat
   });
@@ -882,6 +885,51 @@ export function IDEApplication() {
         .then(() => showToast('Room code copied'))
         .catch(() => showToast(`Room code: ${currentRoom.code}`));
     }
+  }
+
+  /**
+   * Re-registers this user in the room before the chat connection opens. Presence expires after a few
+   * minutes without a heartbeat (sleeping laptops, background tabs, server restarts), and the server rejects
+   * room messages from users it no longer counts as active, so every reconnect must rejoin first.
+   */
+  async function prepareRoomConnection(): Promise<boolean> {
+    const currentRoom = roomRef.current;
+    if (!currentRoom) {
+      return false;
+    }
+    try {
+      await joinRoom(currentRoom.code);
+      return true;
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 401) {
+        return handleRejoinFailure(error);
+      }
+    }
+    // The server no longer recognises this browser session, for example after a restart. Sign in again
+    // with the same profile and rejoin instead of silently dropping every message.
+    try {
+      const currentUser = userRef.current;
+      await signIn(currentUser.name, currentUser.avatarUrl);
+      await joinRoom(currentRoom.code);
+      showToast('Reconnected to the room after the server restarted.');
+      return true;
+    } catch (error) {
+      return handleRejoinFailure(error);
+    }
+  }
+
+  function handleRejoinFailure(error: unknown): boolean {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
+      const notice = error.status === 404
+        ? 'This room is no longer available.'
+        : error.message.includes('room_locked')
+          ? 'This room was locked while you were away. Ask the Lead Pear to unlock it.'
+          : 'This room filled up while you were away.';
+      returnToLanding(notice);
+      return false;
+    }
+    // Network and server errors: let the connection retry on its normal schedule.
+    return true;
   }
 
   function showToast(message: string) {
