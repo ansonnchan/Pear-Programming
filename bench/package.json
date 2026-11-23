@@ -1,0 +1,19 @@
+{
+  "name": "@pearprogram/bench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Edit latency, load, and execution recovery measurements for Pear Programming",
+  "scripts": {
+    "latency": "node edit-latency.mjs",
+    "load": "node room-load.mjs",
+    "crash": "node execution-crash.mjs"
+  },
+  "dependencies": {
+    "ioredis": "5.4.1",
+    "playwright": "1.61.0",
+    "ws": "8.18.0",
+    "y-websocket": "1.5.4",
+    "yjs": "13.6.20"
+  }
+}

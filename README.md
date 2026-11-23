@@ -38,6 +38,14 @@ React + Monaco
 - **Realtime service**: Node and Yjs to sync edits and save snapshots
 - **Storage**: PostgreSQL holds workspaces, files, and sessions; Redis holds presence, live update fan-out, and the execution queue
 
+## Performance
+
+Measured on one laptop with the scripts in [bench/](bench/); [docs/performance.md](docs/performance.md) has the method and full results.
+
+- **Edit latency**: 10.2 ms p95 from a keystroke to the other four browsers in a room
+- **Load**: one realtime instance sustained 400 rooms (2,000 editing clients, 4,000 edits/s) at 2.7 ms p95 with no lost edits
+- **Crash recovery**: when a backend is killed mid-run, another one requeues the job in 6.7 s p95 and finishes it before the deadline
+
 ## Run locally
 
 Needs Java 21, Maven, Node 20, and Docker.

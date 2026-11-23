@@ -23,6 +23,8 @@ frontend/.vite/
 frontend/vite.config.d.ts
 frontend/vite.config.js
 realtime/.cache/
+bench/results/
+bench/package-lock.json
 
 # Env
 .env
