@@ -96,6 +96,36 @@ test('room cleanup keeps unsaved documents until their snapshot persists', async
   await waitFor(async () => (await activeDocs(running.port)) === 0, 'the persisted document to be evicted');
 });
 
+test('instances that seed the same plain-text file can apply each other\'s edits', async (t) => {
+  const backend = await startMockBackend({ snapshotDelayMs: 0, plainText: 'shared draft' });
+  t.after(() => {
+    backend.server.closeAllConnections();
+    backend.server.close();
+  });
+  const firstInstance = await startServer(false, backend.env);
+  t.after(() => stopIfRunning(firstInstance.child));
+  const secondInstance = await startServer(false, backend.env);
+  t.after(() => stopIfRunning(secondInstance.child));
+
+  const docPath = 'ROOM03/33333333-3333-4333-8333-333333333333';
+  const writer = connectClient(firstInstance.port, docPath);
+  const reader = connectClient(secondInstance.port, docPath);
+  t.after(() => {
+    writer.close();
+    reader.close();
+  });
+  assert.equal(await writer.synced, 'shared draft', firstInstance.output());
+  assert.equal(await reader.synced, 'shared draft', secondInstance.output());
+
+  // Redis pub/sub relays only the incremental update, so apply just that to the other instance's copy.
+  let relayed = null;
+  writer.doc.once('update', (update) => { relayed = update; });
+  writer.doc.getText('monaco').insert(0, 'edited ');
+  Y.applyUpdate(reader.doc, relayed);
+
+  assert.equal(reader.doc.getText('monaco').toString(), 'edited shared draft');
+});
+
 async function activeDocs(port) {
   const response = await fetch(`http://127.0.0.1:${port}/healthz`);
   return (await response.json()).activeDocs;
@@ -132,7 +162,7 @@ function connectClient(port, docPath) {
     provider.awareness.destroy();
     doc.destroy();
   };
-  return { close, synced };
+  return { close, doc, synced };
 }
 
 async function startMockBackend({ snapshotDelayMs, plainText }) {

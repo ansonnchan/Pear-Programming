@@ -63,16 +63,22 @@ The benchmark claims 100 jobs as crashed workers, waits for their leases to expi
 
 Its defaults match the application configuration:
 
-- 30-second worker lease;
-- 5-second recovery scan;
+- 6-second worker lease;
+- 1-second recovery scan;
 - 100 abandoned jobs.
 
 Override them when evaluating a proposed configuration:
 
 ```bash
 BENCHMARK_LEASE_MS=5000 \
-BENCHMARK_RECOVERY_SCAN_MS=1000 \
+BENCHMARK_RECOVERY_SCAN_MS=500 \
 mvn -Dtest=ExecutionRecoveryBenchmark test
 ```
 
-Do not describe lease duration plus scan delay as successful execution recovery. A recovered job must still finish before its execution deadline. With the current 20-second deadline and 30-second lease, stale work is finalized safely but will normally exceed its deadline before another worker can resume it.
+This benchmark claims every job and never renews it, so it measures the worst case: a worker that dies right after renewing its lease. [bench/execution-crash.mjs](../bench/execution-crash.mjs) measures the same path with real backend processes killed mid-run; results are in [performance.md](performance.md).
+
+## Leases and the execution deadline
+
+A worker renews its lease every third of the lease duration from a background heartbeat, including while it is blocked in a provider call. Wandbox runs code inside one HTTP request that can take up to 12 seconds plus retries, so without the heartbeat the lease would have to outlast the slowest request, and a crashed worker's job would not be noticed until after its 20-second deadline.
+
+Keep `EXECUTION_WORKER_LEASE` plus `EXECUTION_WORKER_RECOVERY_INTERVAL` well under `JUDGE0_EXECUTION_DEADLINE`; the backend logs a warning at startup when they are not. Do not describe lease duration plus scan delay as successful execution recovery on its own: a recovered job must still finish before its execution deadline, which the crash test checks.

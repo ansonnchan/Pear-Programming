@@ -14,7 +14,10 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,6 +37,9 @@ public class ExecutionService {
     private final ExecutionCoordinator coordinator;
     private final ExecutionMetrics metrics;
     private final ThreadPoolExecutor executor;
+    // Renews leases while a worker is blocked in a provider call. Wandbox runs code inside one HTTP
+    // request, so without this the lease would have to outlast the slowest request plus retries.
+    private final ScheduledExecutorService leaseHeartbeat;
     private final AtomicInteger activeWorkers = new AtomicInteger();
     private final AtomicBoolean acceptingWork = new AtomicBoolean(true);
     private final String workerId = UUID.randomUUID().toString();
@@ -59,6 +65,19 @@ public class ExecutionService {
                     thread.setDaemon(true);
                     return thread;
                 }, new ThreadPoolExecutor.AbortPolicy());
+        this.leaseHeartbeat = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "pear-execution-lease-" + workerId.substring(0, 8));
+            thread.setDaemon(true);
+            return thread;
+        });
+        log.info("Execution worker started workerId={} threads={} leaseMs={} recoveryIntervalMs={}", workerId, threads,
+                properties.getWorkerLease().toMillis(), properties.getWorkerRecoveryInterval().toMillis());
+        Duration recoveryWindow = properties.getWorkerLease().plus(properties.getWorkerRecoveryInterval());
+        if (recoveryWindow.compareTo(properties.getDeadline()) >= 0) {
+            log.warn("Execution worker lease plus recovery interval ({} ms) is not shorter than the execution deadline ({} ms); "
+                    + "jobs from a crashed worker will time out before another worker can resume them",
+                    recoveryWindow.toMillis(), properties.getDeadline().toMillis());
+        }
     }
 
     public ExecutionResponse submit(String rawRoomCode, String rawUserId, String rawIdempotencyKey, ExecutionRequest request) {
@@ -114,7 +133,7 @@ public class ExecutionService {
         }
     }
 
-    @Scheduled(fixedDelayString = "${pearprogram.execution.worker-recovery-interval:5s}")
+    @Scheduled(fixedDelayString = "${pearprogram.execution.worker-recovery-interval:1s}")
     void recoverStaleWork() {
         if (!acceptingWork.get()) return;
         ExecutionRecoveryBatch recovered = coordinator.recoverExpiredLeases(
@@ -132,6 +151,7 @@ public class ExecutionService {
         long startedAt = System.nanoTime();
         UUID executionId = claimed.executionId();
         boolean terminal = false;
+        ScheduledFuture<?> heartbeat = startLeaseHeartbeat(executionId);
         try {
             if (Instant.now().isAfter(claimed.deadline())) {
                 fail(claimed, ExecutionStatus.TIMED_OUT, "Execution exceeded its deadline.", startedAt);
@@ -195,8 +215,23 @@ public class ExecutionService {
             fail(claimed, ExecutionStatus.FAILED, "Execution failed because of an internal error.", startedAt);
             terminal = true;
         } finally {
+            heartbeat.cancel(false);
             if (terminal) coordinator.acknowledge(executionId, workerId);
         }
+    }
+
+    private ScheduledFuture<?> startLeaseHeartbeat(UUID executionId) {
+        long leaseMs = Math.max(1, properties.getWorkerLease().toMillis());
+        long periodMs = Math.max(10, leaseMs / 3);
+        return leaseHeartbeat.scheduleAtFixedRate(() -> {
+            try {
+                // Renewal is a compare-and-set on the lease owner, so a late tick after a reschedule or
+                // acknowledgement is a no-op rather than a resurrected lease.
+                coordinator.renewLease(executionId, workerId, Instant.now().plusMillis(leaseMs));
+            } catch (RuntimeException exception) {
+                log.debug("Execution lease renewal failed executionId={} reason={}", executionId, exception.getMessage());
+            }
+        }, periodMs, periodMs, TimeUnit.MILLISECONDS);
     }
 
     private ValidatedRequest validate(ExecutionRequest request) {
@@ -275,6 +310,7 @@ public class ExecutionService {
     @PreDestroy
     void shutdown() {
         acceptingWork.set(false);
+        leaseHeartbeat.shutdownNow();
         executor.shutdown();
         try {
             if (!executor.awaitTermination(5, TimeUnit.SECONDS)) executor.shutdownNow();

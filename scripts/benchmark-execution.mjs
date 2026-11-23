@@ -96,6 +96,13 @@ const session = new HttpSession(baseUrl);
 await session.signIn(`Execution benchmark ${Date.now()}`);
 const room = await session.mutate('/api/rooms/create', {});
 
+// Room members expire after three minutes without a presence heartbeat. The browser sends one over
+// STOMP; this script has no STOMP connection, so it re-joins the room (as a reconnecting browser does)
+// at most once a minute, outside the timed part of each sample.
+const MEMBERSHIP_REFRESH_MS = 60_000;
+let membershipRefreshedAt = performance.now();
+let membershipRefresh = null;
+
 const sourceCode = options.source ?? DEFAULT_SOURCE[options.language] ?? 'print("pear")';
 const totalRequests = options.warmup + options.runs;
 if (totalRequests > 10) {
@@ -124,6 +131,8 @@ await Promise.all(Array.from({ length: options.concurrency }, async () => {
       return;
     }
     samples[index] = await executeSample(index, false);
+    // The public Wandbox service answers bursts with HTTP 429; a gap keeps a long run under its limit.
+    await delay(options.gapMs);
   }
 }));
 
@@ -154,7 +163,20 @@ if (options.output) {
   console.log(`Wrote ${options.output}`);
 }
 
+async function keepMembershipFresh() {
+  if (performance.now() - membershipRefreshedAt < MEMBERSHIP_REFRESH_MS) {
+    return;
+  }
+  membershipRefresh ??= session.mutate('/api/rooms/join', { code: room.code }).then(() => {
+    membershipRefreshedAt = performance.now();
+  }).finally(() => {
+    membershipRefresh = null;
+  });
+  await membershipRefresh;
+}
+
 async function executeSample(index, warmup) {
+  await keepMembershipFresh();
   const idempotencyKey = `benchmark-${Date.now()}-${warmup ? 'warmup' : 'run'}-${index}-${crypto.randomUUID()}`;
   const startedAt = performance.now();
   const submitted = await session.mutate(
@@ -194,12 +216,13 @@ async function executeSample(index, warmup) {
 function parseArguments(args) {
   const values = {
     baseUrl: process.env.PEAR_API_URL ?? 'http://localhost:8081',
-    runs: 8,
-    warmup: 1,
+    runs: 30,
+    warmup: 3,
     concurrency: 1,
     language: 'javascript',
     source: null,
     pollMs: 100,
+    gapMs: 0,
     timeoutMs: 60_000,
     output: null
   };
@@ -219,6 +242,7 @@ function parseArguments(args) {
       case '--language': values.language = value; break;
       case '--source': values.source = value; break;
       case '--poll-ms': values.pollMs = positiveInteger(value, argument); break;
+      case '--gap-ms': values.gapMs = nonNegativeInteger(value, argument); break;
       case '--timeout-ms': values.timeoutMs = positiveInteger(value, argument); break;
       case '--output': values.output = value; break;
       default: throw new Error(`Unknown option "${argument}"`);
