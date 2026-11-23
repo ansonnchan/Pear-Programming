@@ -219,6 +219,30 @@ class ExecutionServiceTests {
     }
 
     @Test
+    void leaseHeartbeatKeepsASlowProviderCallFromBeingRequeued() throws Exception {
+        properties.setWorkerLease(Duration.ofMillis(60));
+        properties.setDeadline(Duration.ofSeconds(5));
+        provider.submitDelayMs = 400;
+        provider.results.add(new ProviderExecutionResult(ExecutionStatus.COMPLETED, "ok", null, null, 0, 1L, null));
+
+        UUID id = submit("slow-provider", "python", "print(1)", "").executionId();
+        long giveUpAt = System.nanoTime() + Duration.ofSeconds(3).toNanos();
+        ExecutionResponse response = service.get("ABC123", id, "user-1");
+        while (!response.status().isTerminal() && System.nanoTime() < giveUpAt) {
+            // Scan far more often than the lease length while the provider call is blocked.
+            service.recoverStaleWork();
+            service.dispatch();
+            Thread.sleep(10);
+            response = service.get("ABC123", id, "user-1");
+        }
+
+        assertThat(response.status()).isEqualTo(ExecutionStatus.COMPLETED);
+        assertThat(provider.submissions).hasValue(1);
+        assertThat(meterRegistry.find(ExecutionMetrics.RECOVERIES).counters()).allSatisfy(
+                counter -> assertThat(counter.count()).isZero());
+    }
+
+    @Test
     void backsOffResultPollingWithoutExceedingTheConfiguredMaximum() {
         properties.setInitialPollInterval(Duration.ofMillis(100));
         properties.setPollInterval(Duration.ofMillis(750));
@@ -289,10 +313,19 @@ class ExecutionServiceTests {
         private final AtomicInteger polls = new AtomicInteger();
         private ProviderExecutionResult defaultResult = new ProviderExecutionResult(ExecutionStatus.RUNNING, null, null, null, null, null, null);
         private ExecutionProviderException failure;
+        private volatile long submitDelayMs;
 
         @Override
         public String submit(ProviderExecutionRequest request) {
             submissions.incrementAndGet();
+            if (submitDelayMs > 0) {
+                try {
+                    Thread.sleep(submitDelayMs);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new ExecutionProviderException("Interrupted", true, exception);
+                }
+            }
             if (failure != null) {
                 throw failure;
             }

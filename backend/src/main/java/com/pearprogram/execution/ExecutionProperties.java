@@ -18,7 +18,8 @@ public class ExecutionProperties {
     private int maxPollAttempts = 25;
     private int workerThreads = 4;
     private Duration workerPollInterval = Duration.ofMillis(200);
-    private Duration workerLease = Duration.ofSeconds(30);
+    private Duration workerLease = Duration.ofSeconds(6);
+    private Duration workerRecoveryInterval = Duration.ofSeconds(1);
     private int workerMaxRetries = 3;
     private Duration workerRetryBackoff = Duration.ofSeconds(1);
     private String provider = "wandbox";
@@ -47,6 +48,8 @@ public class ExecutionProperties {
     public void setWorkerPollInterval(Duration value) { this.workerPollInterval = value; }
     public Duration getWorkerLease() { return workerLease; }
     public void setWorkerLease(Duration value) { this.workerLease = value; }
+    public Duration getWorkerRecoveryInterval() { return workerRecoveryInterval; }
+    public void setWorkerRecoveryInterval(Duration value) { this.workerRecoveryInterval = value; }
     public int getWorkerMaxRetries() { return workerMaxRetries; }
     public void setWorkerMaxRetries(int value) { this.workerMaxRetries = value; }
     public Duration getWorkerRetryBackoff() { return workerRetryBackoff; }

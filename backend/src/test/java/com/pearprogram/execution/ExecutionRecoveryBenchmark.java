@@ -25,8 +25,8 @@ class ExecutionRecoveryBenchmark {
     @Test
     void measuresExpiredLeaseRecoveryAgainstRedis() throws Exception {
         int runs = integerEnvironment("BENCHMARK_RUNS", 100);
-        long leaseMs = longEnvironment("BENCHMARK_LEASE_MS", 30_000);
-        long recoveryScanMs = longEnvironment("BENCHMARK_RECOVERY_SCAN_MS", 5_000);
+        long leaseMs = longEnvironment("BENCHMARK_LEASE_MS", 6_000);
+        long recoveryScanMs = longEnvironment("BENCHMARK_RECOVERY_SCAN_MS", 1_000);
         String host = environment("BENCHMARK_REDIS_HOST", "127.0.0.1");
         int port = integerEnvironment("BENCHMARK_REDIS_PORT", 6379);
 
