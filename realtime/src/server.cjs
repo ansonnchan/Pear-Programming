@@ -1,4 +1,5 @@
 const http = require('node:http');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { URL } = require('node:url');
@@ -362,14 +363,30 @@ async function hydratePostgresSnapshot(doc, roomCode, fileId) {
       const yText = doc.getText('monaco');
       const yMeta = doc.getMap('meta');
       if (yText.length === 0) {
-        yText.insert(0, snapshot.plainText);
+        seedPlainText(doc, fileId, snapshot.plainText);
+      } else if (!yMeta.get('initialized')) {
+        yMeta.set('initialized', true);
       }
-      yMeta.set('initialized', true);
       log('info', 'Loaded PostgreSQL plain-text snapshot', { room: roomCode, fileId });
     }
   } catch (error) {
     log('warn', 'Unable to hydrate PostgreSQL snapshot', { room: roomCode, fileId, error: error.message });
   }
+}
+
+// Seeds a document from plain text so that every instance, and every restart, that seeds the same file
+// from the same text creates identical Yjs items. Seeding under each instance's random client ID gave
+// each instance its own copy of the text, so edits relayed through Redis referenced items the other
+// instance did not have and were never applied.
+function seedPlainText(doc, fileId, plainText) {
+  const seed = new Y.Doc();
+  seed.clientID = crypto.createHash('sha256').update(`${fileId}\0${plainText}`).digest().readUInt32BE(0);
+  seed.transact(() => {
+    seed.getText('monaco').insert(0, plainText);
+    seed.getMap('meta').set('initialized', true);
+  });
+  Y.applyUpdate(doc, Y.encodeStateAsUpdate(seed));
+  seed.destroy();
 }
 
 async function hydrateRedisUpdates(doc, roomCode, fileId) {
